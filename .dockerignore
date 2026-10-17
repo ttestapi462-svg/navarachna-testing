@@ -1,0 +1,13 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/node_modules
+**/.next
+**/bin
+**/obj
+**/out
+**/dist
+**/*.md
+**/*.log
+.env*
