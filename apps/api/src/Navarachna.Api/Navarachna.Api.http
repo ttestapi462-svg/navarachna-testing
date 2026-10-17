@@ -1,0 +1,6 @@
+@Navarachna.Api_HostAddress = http://localhost:5207
+
+GET {{Navarachna.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

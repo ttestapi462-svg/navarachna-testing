@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Navarachna.Api/Navarachna.Api.csproj" />
+  </Folder>
+</Solution>
