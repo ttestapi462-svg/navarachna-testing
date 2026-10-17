@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: navarachna-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: navarachna_studio
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d navarachna_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: navarachna-api
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=navarachna_studio;Username=postgres;Password=postgrespassword"
+      ASPNETCORE_ENVIRONMENT: "Development"
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    container_name: navarachna-web
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_URL: "http://api:5000"
+      NODE_ENV: "production"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
