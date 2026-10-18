@@ -25,6 +25,10 @@
       "expo-secure-store",
       "expo-status-bar"
     ],
-    "scheme": "navarachna"
+    "scheme": "navarachna",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    }
   }
 }

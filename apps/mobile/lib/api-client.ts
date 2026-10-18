@@ -1,5 +1,18 @@
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
+import { Alert } from "react-native";
+
+export class MobileApiError extends Error {
+  status: number;
+  data: any;
+
+  constructor(message: string, status: number, data?: any) {
+    super(message);
+    this.name = "MobileApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
 
 export function getApiBaseUrl(): string {
   if (Constants.expoConfig?.extra?.apiUrl) {
@@ -13,25 +26,88 @@ export function getApiBaseUrl(): string {
   return "http://localhost:5207";
 }
 
-const SESSION_KEY = "navarachna_session_cookie";
+const TOKEN_KEY = "navarachna_jwt_token";
+const REFRESH_KEY = "navarachna_refresh_token";
 
-export async function setSessionToken(token: string) {
-  await SecureStore.setItemAsync(SESSION_KEY, token);
+let onSessionSupersededCallback: (() => void) | null = null;
+
+export function registerSessionSupersededHandler(callback: () => void) {
+  onSessionSupersededCallback = callback;
 }
 
-export async function getSessionToken() {
-  return await SecureStore.getItemAsync(SESSION_KEY);
+export async function setAuthTokens(token: string, refreshToken: string) {
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await SecureStore.setItemAsync(REFRESH_KEY, refreshToken);
 }
 
-export async function clearSessionToken() {
-  await SecureStore.deleteItemAsync(SESSION_KEY);
+export async function getAuthToken(): Promise<string | null> {
+  return await SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  return await SecureStore.getItemAsync(REFRESH_KEY);
+}
+
+export async function clearAuthTokens() {
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(REFRESH_KEY);
+}
+
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+async function executeTokenRefresh(): Promise<string> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) {
+    throw new Error("No refresh token stored.");
+  }
+
+  const primaryBaseUrl = getApiBaseUrl();
+  const response = await fetch(`${primaryBaseUrl}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    if (errorBody.code === "SESSION_SUPERSEDED") {
+      await clearAuthTokens();
+      Alert.alert(
+        "Session Terminated",
+        "Your account was logged into from another device (e.g. Web Dashboard). Please sign in again."
+      );
+      if (onSessionSupersededCallback) {
+        onSessionSupersededCallback();
+      }
+    } else if (errorBody.code === "SESSION_TERMINATED") {
+      await clearAuthTokens();
+      if (onSessionSupersededCallback) {
+        onSessionSupersededCallback();
+      }
+    }
+    throw new Error("Refresh failed");
+  }
+
+  const data = await response.json();
+  if (data.token) {
+    await setAuthTokens(data.token, data.refreshToken || refreshToken);
+    return data.token;
+  }
+
+  throw new Error("Invalid token refresh payload.");
 }
 
 export async function mobileApiClient<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = await getSessionToken();
+  const token = await getAuthToken();
   const primaryBaseUrl = getApiBaseUrl();
 
   const headers: Record<string, string> = {
@@ -41,16 +117,14 @@ export async function mobileApiClient<T = unknown>(
   };
 
   if (token) {
-    // Injects ASP.NET Core cookie session header
-    headers["Cookie"] = `.Navarachna.Auth=${token}`;
-    headers["Authorization"] = `Cookie ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const executeFetch = async (baseUrl: string) => {
+  const executeFetch = async (baseUrl: string, customHeaders = headers) => {
     const url = `${baseUrl}${endpoint}`;
     return await fetch(url, {
       ...options,
-      headers,
+      headers: customHeaders,
     });
   };
 
@@ -58,7 +132,7 @@ export async function mobileApiClient<T = unknown>(
   try {
     response = await executeFetch(primaryBaseUrl);
   } catch (primaryErr) {
-    // Fallback: If port 5207 direct connect fails, try port 3000 (Next.js proxy gateway)
+    // Port 3000 fallback gateway if 5207 direct LAN connection is blocked
     const hostUri = Constants.expoConfig?.hostUri;
     const ip = hostUri ? hostUri.split(":")[0] : "localhost";
     const fallbackBaseUrl = `http://${ip}:3000`;
@@ -73,18 +147,86 @@ export async function mobileApiClient<T = unknown>(
     }
   }
 
-  // Extract set-cookie if present on login
-  const setCookie = response.headers.get("set-cookie");
-  if (setCookie) {
-    const match = setCookie.match(/\.Navarachna\.Auth=([^;]+)/);
-    if (match && match[1]) {
-      await setSessionToken(match[1]);
+  if (response.status === 401) {
+    const errorBody = await response.clone().json().catch(() => ({}));
+
+    // Force Logout Detection on Mobile (another device took over):
+    if (errorBody.code === "SESSION_SUPERSEDED") {
+      await clearAuthTokens();
+      Alert.alert(
+        "Session Terminated",
+        "Your account was logged in from another device. To protect your studio data, this mobile session was ended."
+      );
+      if (onSessionSupersededCallback) {
+        onSessionSupersededCallback();
+      }
+      throw new Error("Session superseded");
+    }
+
+    // Normal session termination (Logged out from another tab / admin revocation):
+    if (errorBody.code === "SESSION_TERMINATED") {
+      await clearAuthTokens();
+      if (onSessionSupersededCallback) {
+        onSessionSupersededCallback();
+      }
+      throw new Error("Session terminated");
+    }
+
+    // Refresh Mutex for normal token expiration
+    if (!endpoint.includes("/api/auth/login") && !endpoint.includes("/api/auth/refresh")) {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const newToken = await executeTokenRefresh();
+          onTokenRefreshed(newToken);
+          const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+          const retryResponse = await executeFetch(primaryBaseUrl, retryHeaders);
+          if (!retryResponse.ok) {
+            throw new Error(`HTTP ${retryResponse.status}`);
+          }
+          if (retryResponse.status === 204) return {} as T;
+          return retryResponse.json();
+        } catch {
+          await clearAuthTokens();
+          if (onSessionSupersededCallback) {
+            onSessionSupersededCallback();
+          }
+          throw new Error("Session expired. Please sign in again.");
+        } finally {
+          isRefreshing = false;
+        }
+      }
+
+      return new Promise<T>((resolve, reject) => {
+        refreshSubscribers.push(async (newToken: string) => {
+          try {
+            const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+            const retryResponse = await executeFetch(primaryBaseUrl, retryHeaders);
+            if (!retryResponse.ok) {
+              reject(new Error(`HTTP ${retryResponse.status}`));
+            } else if (retryResponse.status === 204) {
+              resolve({} as T);
+            } else {
+              resolve(await retryResponse.json());
+            }
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
     }
   }
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(errorBody || `HTTP ${response.status}`);
+    const errorText = await response.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(errorText);
+    } catch {
+      // not JSON
+    }
+    const message = parsed?.message || parsed?.detail || errorText || `HTTP ${response.status}`;
+    throw new MobileApiError(message, response.status, parsed);
   }
 
   if (response.status === 204) {

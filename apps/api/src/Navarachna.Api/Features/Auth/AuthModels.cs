@@ -1,7 +1,37 @@
 namespace Navarachna.Api.Features.Auth;
 
-public record LoginRequest(string Email, string Password);
+public record LoginRequest(
+    string Identifier, 
+    string Password, 
+    string? DeviceName = null, 
+    bool ForceLogout = false
+);
 
-public record UserDto(Guid Id, string Email, string FullName, string Role);
+public record RefreshTokenRequest(string RefreshToken);
 
-public record AuthResponse(bool Success, string Message, UserDto? User, string? SessionToken = null);
+public record UserDto(
+    long Id,
+    string Username,
+    string? Email,
+    string FirstName,
+    string? LastName,
+    string? PhoneNumber,
+    string? ActiveDeviceName,
+    DateTime? SessionStartedAt,
+    DateTime CreatedAt,
+    long? CreatedBy,
+    DateTime? UpdatedAt,
+    long? UpdatedBy
+);
+
+public record AuthResponse(
+    bool Success,
+    string Message,
+    string? Token = null,
+    string? RefreshToken = null,
+    UserDto? User = null,
+    string? ErrorCode = null,
+    bool RequiresForceLogout = false,
+    string? ActiveDevice = null,
+    DateTime? SessionStartedAt = null
+);
