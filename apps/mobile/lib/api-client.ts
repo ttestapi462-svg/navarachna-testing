@@ -1,7 +1,18 @@
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || "http://10.0.2.2:5000";
+export function getApiBaseUrl(): string {
+  if (Constants.expoConfig?.extra?.apiUrl) {
+    return Constants.expoConfig.extra.apiUrl as string;
+  }
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(":")[0];
+    return `http://${ip}:5207`;
+  }
+  return "http://localhost:5207";
+}
+
 const SESSION_KEY = "navarachna_session_cookie";
 
 export async function setSessionToken(token: string) {
@@ -21,7 +32,7 @@ export async function mobileApiClient<T = unknown>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = await getSessionToken();
-  const url = `${API_BASE_URL}${endpoint}`;
+  const primaryBaseUrl = getApiBaseUrl();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -35,10 +46,32 @@ export async function mobileApiClient<T = unknown>(
     headers["Authorization"] = `Cookie ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const executeFetch = async (baseUrl: string) => {
+    const url = `${baseUrl}${endpoint}`;
+    return await fetch(url, {
+      ...options,
+      headers,
+    });
+  };
+
+  let response: Response;
+  try {
+    response = await executeFetch(primaryBaseUrl);
+  } catch (primaryErr) {
+    // Fallback: If port 5207 direct connect fails, try port 3000 (Next.js proxy gateway)
+    const hostUri = Constants.expoConfig?.hostUri;
+    const ip = hostUri ? hostUri.split(":")[0] : "localhost";
+    const fallbackBaseUrl = `http://${ip}:3000`;
+    if (fallbackBaseUrl !== primaryBaseUrl) {
+      try {
+        response = await executeFetch(fallbackBaseUrl);
+      } catch {
+        throw primaryErr;
+      }
+    } else {
+      throw primaryErr;
+    }
+  }
 
   // Extract set-cookie if present on login
   const setCookie = response.headers.get("set-cookie");
