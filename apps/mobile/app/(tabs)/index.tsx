@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { useEffect, useState } from "react";
-import { mobileApiClient } from "../../lib/api-client";
+import { mobileApiClient, getApiBaseUrl } from "../../lib/api-client";
 
 interface HealthStatus {
   status: string;
@@ -37,6 +37,9 @@ export default function MobileHomeScreen() {
       <View className="mb-4 rounded-xl bg-white p-5 border border-slate-200 shadow-xs">
         <Text className="text-base font-semibold text-slate-800">API Connection</Text>
         <Text className="mt-1 text-xs text-slate-500">
+          Target: {getApiBaseUrl()}
+        </Text>
+        <Text className="mt-0.5 text-xs text-slate-500">
           Status: {loading ? "Checking..." : health ? `Connected (${health.service})` : "Disconnected"}
         </Text>
         <TouchableOpacity
