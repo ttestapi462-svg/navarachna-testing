@@ -28,7 +28,7 @@
     "scheme": "navarachna",
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     }
   }
 }
