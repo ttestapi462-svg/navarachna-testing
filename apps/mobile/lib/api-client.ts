@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 export class MobileApiError extends Error {
   status: number;
@@ -29,6 +29,49 @@ export function getApiBaseUrl(): string {
 const TOKEN_KEY = "navarachna_jwt_token";
 const REFRESH_KEY = "navarachna_refresh_token";
 
+// Cross-platform persistent storage helper (Web: localStorage, Native: SecureStore)
+async function storageSet(key: string, value: string): Promise<void> {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    // Fallback if Keystore is restricted
+  }
+}
+
+async function storageGet(key: string): Promise<string | null> {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+    return null;
+  }
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return null;
+  }
+}
+
+async function storageDelete(key: string): Promise<void> {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(key);
+    }
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // Fallback
+  }
+}
+
 let onSessionSupersededCallback: (() => void) | null = null;
 
 export function registerSessionSupersededHandler(callback: () => void) {
@@ -36,21 +79,21 @@ export function registerSessionSupersededHandler(callback: () => void) {
 }
 
 export async function setAuthTokens(token: string, refreshToken: string) {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
-  await SecureStore.setItemAsync(REFRESH_KEY, refreshToken);
+  await storageSet(TOKEN_KEY, token);
+  await storageSet(REFRESH_KEY, refreshToken);
 }
 
 export async function getAuthToken(): Promise<string | null> {
-  return await SecureStore.getItemAsync(TOKEN_KEY);
+  return await storageGet(TOKEN_KEY);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return await SecureStore.getItemAsync(REFRESH_KEY);
+  return await storageGet(REFRESH_KEY);
 }
 
 export async function clearAuthTokens() {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_KEY);
+  await storageDelete(TOKEN_KEY);
+  await storageDelete(REFRESH_KEY);
 }
 
 let isRefreshing = false;
