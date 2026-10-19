@@ -96,6 +96,8 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_tbl_users_created_by ON public.tbl_users (created_by);
 CREATE INDEX IF NOT EXISTS idx_tbl_users_updated_by ON public.tbl_users (updated_by);
 CREATE INDEX IF NOT EXISTS idx_tbl_users_session_lookup ON public.tbl_users (id, active_session_id);
+CREATE INDEX IF NOT EXISTS idx_tbl_users_lower_username ON public.tbl_users (lower(username));
+CREATE INDEX IF NOT EXISTS idx_tbl_users_lower_email ON public.tbl_users (lower(email));
 
 -- 6. User Tokens Table (For Refresh & Single Session Rotation)
 CREATE TABLE IF NOT EXISTS public.tbl_user_tokens
@@ -118,6 +120,7 @@ CREATE TABLE IF NOT EXISTS public.tbl_user_tokens
 );
 
 CREATE INDEX IF NOT EXISTS idx_tbl_user_tokens_user_session ON public.tbl_user_tokens (user_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_tbl_user_tokens_expires_at ON public.tbl_user_tokens (expires_at);
 
 -- 7. PostgreSQL Automated Trigger for updated_at
 CREATE OR REPLACE FUNCTION public.fn_tbl_users_auto_update_timestamp()
@@ -145,7 +148,6 @@ VALUES (
 )
 ON CONFLICT (username) DO UPDATE SET
     first_name = EXCLUDED.first_name,
-    password_hash = EXCLUDED.password_hash,
     is_active = true,
     is_locked = false;
 

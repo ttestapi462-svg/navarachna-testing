@@ -8,6 +8,7 @@ using Navarachna.Api.Common.Errors;
 using Navarachna.Api.Data;
 using Navarachna.Api.Features.Auth;
 using Navarachna.Api.Hubs;
+using Navarachna.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +21,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddHostedService<TokenCleanupWorker>();
 
 // 3. Add Controllers
 builder.Services.AddControllers();

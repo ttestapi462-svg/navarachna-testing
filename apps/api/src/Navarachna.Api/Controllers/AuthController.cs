@@ -84,10 +84,9 @@ public class AuthController : ControllerBase
         // Password Verification
         bool isPasswordValid = _passwordService.VerifyPassword(user, user.PasswordHash, request.Password);
         
-        // Fallback for bootstrap plaintext during initial dev seeding if not yet hashed
-        if (!isPasswordValid && user.PasswordHash == request.Password)
+        // Upgrade bootstrap plaintext during initial dev seeding to secure PBKDF2 hash on first successful login
+        if (isPasswordValid && user.PasswordHash == request.Password)
         {
-            isPasswordValid = true;
             user.PasswordHash = _passwordService.HashPassword(user, request.Password);
         }
 
@@ -112,16 +111,21 @@ public class AuthController : ControllerBase
         var deviceName = string.IsNullOrWhiteSpace(request.DeviceName) ? "Web Dashboard" : request.DeviceName.Trim();
 
         // SINGLE ACTIVE SESSION ENFORCEMENT & GHOST SESSION AUTO-CLEAR:
-        // A session is ONLY considered active if an actual unrevoked, unexpired token exists in tbl_user_tokens
-        bool hasLiveToken = user.ActiveSessionId.HasValue && await _dbContext.UserTokens
-            .AnyAsync(t => t.UserId == user.Id 
-                        && t.SessionId == user.ActiveSessionId 
-                        && !t.IsRevoked 
-                        && t.ExpiresAt > DateTime.UtcNow);
+        // A session is ONLY considered active if an actual unrevoked, unexpired token exists in tbl_user_tokens.
+        // We only need to check the database if user has an active session AND caller hasn't confirmed force logout.
+        bool hasLiveToken = false;
+        if (user.ActiveSessionId.HasValue && !request.ForceLogout)
+        {
+            hasLiveToken = await _dbContext.UserTokens
+                .AnyAsync(t => t.UserId == user.Id 
+                            && t.SessionId == user.ActiveSessionId 
+                            && !t.IsRevoked 
+                            && t.ExpiresAt > DateTime.UtcNow);
+        }
 
         // If active_session_id exists in tbl_users but no live token exists in tbl_user_tokens,
         // it means the previous session naturally expired or was abandoned. Auto-clear it!
-        if (user.ActiveSessionId.HasValue && !hasLiveToken)
+        if (user.ActiveSessionId.HasValue && !hasLiveToken && !request.ForceLogout)
         {
             user.ActiveSessionId = null;
             user.ActiveDeviceName = null;
@@ -147,10 +151,10 @@ public class AuthController : ControllerBase
         // 1. Generate new Session ID
         var newSessionId = Guid.NewGuid();
 
-        // 2. HARD DELETE all previous tokens for this user and any expired tokens across the studio
-        // Requirement: tbl_user_tokens must never maintain older, superseded, or expired records at all
+        // 2. HARD DELETE all previous tokens for THIS user
+        // Requirement: tbl_user_tokens must never maintain older or superseded records for the active user
         await _dbContext.UserTokens
-            .Where(t => t.UserId == user.Id || t.ExpiresAt < DateTime.UtcNow)
+            .Where(t => t.UserId == user.Id)
             .ExecuteDeleteAsync();
 
         // 3. Update user active session fields
