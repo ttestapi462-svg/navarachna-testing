@@ -68,5 +68,12 @@ INSERT INTO tbl_users (id, username, email, password_hash, first_name, last_name
 VALUES (1, 'admin', 'admin@navarachna.com', 'Admin@1234', 'Studio', 'Admin', '+919876543210', TRUE, FALSE, clock_timestamp(), NULL, NULL, NULL)
 ON CONFLICT (username) DO NOTHING;
 
+-- Seed Studio Users
+INSERT INTO tbl_users (username, email, password_hash, first_name, last_name, is_active, is_locked, created_at, created_by)
+VALUES 
+    ('logesh', 'logesh@navarachna.com', 'Logesh@1234', 'Logesh', NULL, TRUE, FALSE, clock_timestamp(), 1),
+    ('srihari', 'srihari@navarachna.com', 'Srihari@1234', 'Sri Hari', NULL, TRUE, FALSE, clock_timestamp(), 1)
+ON CONFLICT (username) DO NOTHING;
+
 COMMIT;
 
