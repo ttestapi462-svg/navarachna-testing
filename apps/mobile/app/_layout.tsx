@@ -2,6 +2,10 @@ import "../global.css";
 import { useEffect } from "react";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 import { registerSessionSupersededHandler } from "../lib/api-client";
 
 export default function RootLayout() {
@@ -14,7 +18,7 @@ export default function RootLayout() {
   }, [router]);
 
   return (
-    <>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -26,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
+
