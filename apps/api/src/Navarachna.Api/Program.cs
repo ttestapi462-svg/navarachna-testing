@@ -13,6 +13,7 @@ using Navarachna.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Exception Handling & ProblemDetails
+builder.Services.AddExceptionHandler<EmployeeApi.Infrastructure.GlobalExceptionHandler>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
@@ -23,12 +24,28 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddHostedService<TokenCleanupWorker>();
 
+// Employee Management services; authentication remains the original Navarachna implementation.
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<DocumentService>();
+if (builder.Configuration["Storage:Provider"] == "Blob")
+    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+else
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+// Employee Management services; authentication remains the original Navarachna implementation.
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<DocumentService>();
+if (builder.Configuration["Storage:Provider"] == "Blob")
+    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+else
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+
 // 3. Add Controllers
 builder.Services.AddControllers();
 
 // 4. Database Context with Npgsql Resilience
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? "Host=localhost;Port=5432;Database=navarachna_studio;Username=postgres;Password=postgres";
+    ?? "Host=navarachana-db.postgres.database.azure.com;Port=5432;Database=navarachana_designer_studio;Username=Navarachna;Password=password@123";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {

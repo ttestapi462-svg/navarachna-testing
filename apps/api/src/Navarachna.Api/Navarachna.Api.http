@@ -1,6 +1,20 @@
-@Navarachna.Api_HostAddress = http://localhost:5207
+@baseUrl = https://localhost:7001
+@token = paste_access_token_here
 
-GET {{Navarachna.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Health
+GET {{baseUrl}}/health
 
-###
+### Login (use a real account from tbl_users)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "your-username-or-email",
+  "password": "your-password",
+  "deviceName": "Local Development",
+  "forceLogout": false
+}
+
+### List employees (requires Navarachna access token)
+GET {{baseUrl}}/api/v1/employees?page=1&pageSize=20
+Authorization: Bearer {{token}}
