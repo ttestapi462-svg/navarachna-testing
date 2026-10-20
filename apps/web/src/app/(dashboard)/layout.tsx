@@ -36,7 +36,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
       <SidebarInset className="h-svh max-h-svh flex flex-col overflow-hidden bg-background text-foreground">
         <DashboardHeader />
         <div className="flex-1 overflow-y-auto min-h-0">
-          <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <main className="max-w-7xl w-full mx-auto px-3 py-4 sm:px-4 lg:px-5 space-y-4">
             {children}
           </main>
         </div>

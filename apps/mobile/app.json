@@ -23,7 +23,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing"
     ],
     "scheme": "navarachna",
     "web": {

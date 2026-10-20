@@ -9,7 +9,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  CircleDollarSign,
   Eye,
   FileImage,
   FileText,
@@ -19,11 +18,9 @@ import {
   Receipt,
   RefreshCw,
   Search,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   UploadCloud,
-  Wallet,
   X,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -265,6 +262,9 @@ export default function ExpensesPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [expenseCalendarMonth, setExpenseCalendarMonth] = useState(() => new Date());
+  const [expenseDatePickerOpen, setExpenseDatePickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -292,6 +292,12 @@ export default function ExpensesPage() {
       if (billPreview?.url) URL.revokeObjectURL(billPreview.url);
     };
   }, [billPreview]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timeoutId = window.setTimeout(() => setFeedback(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [feedback]);
 
   const loadExpenses = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -324,12 +330,21 @@ export default function ExpensesPage() {
     void loadExpenses();
   }, [loadExpenses]);
 
-  const visibleSpend = useMemo(
-    () => expenses.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0),
-    [expenses],
-  );
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const hasFilters = Boolean(search || fromDate || toDate);
+  const calendarDays = useMemo(() => {
+    const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(start); day.setDate(start.getDate() + index); return day;
+    });
+  }, [calendarMonth]);
+  const expenseCalendarDays = useMemo(() => {
+    const first = new Date(expenseCalendarMonth.getFullYear(), expenseCalendarMonth.getMonth(), 1);
+    const start = new Date(first); start.setDate(first.getDate() - first.getDay());
+    return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; });
+  }, [expenseCalendarMonth]);
 
   const openCreateForm = () => {
     setEditingExpense(null);
@@ -468,30 +483,25 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="space-y-6 pb-8 sm:space-y-7">
+    <div className="space-y-4 pb-5">
       {/* Page heading */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.19em] text-primary">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10"><Receipt className="size-4" /></span>
-            Atelier operations
-          </div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Expense management</h1>
-          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">Keep purchases, receipts and studio spending organised in one place.</p>
+          <h1 className="font-heading text-lg font-semibold tracking-tight text-foreground sm:text-xl">Expense management</h1>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
             type="button"
             onClick={() => void loadExpenses(true)}
             disabled={loading || refreshing}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
           >
             <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
           <button
             type="button"
             onClick={openCreateForm}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
           >
             <Plus className="size-4" /> Add expense
           </button>
@@ -499,51 +509,20 @@ export default function ExpensesPage() {
       </div>
 
       {feedback ? (
-        <div role="status" className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${feedback.kind === "success" ? "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300" : "border-destructive/20 bg-destructive/[0.06] text-destructive"}`}>
+        <div
+          role={feedback.kind === "error" ? "alert" : "status"}
+          aria-live={feedback.kind === "error" ? "assertive" : "polite"}
+          className={`fixed right-4 top-[4.25rem] z-[60] flex w-[min(26rem,calc(100vw-2rem))] items-start gap-2.5 rounded-xl border px-3 py-2.5 text-xs shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-top-1 ${feedback.kind === "success" ? "border-emerald-500/25 bg-background/95 text-emerald-700 dark:text-emerald-300" : "border-destructive/25 bg-background/95 text-destructive"}`}
+        >
           {feedback.kind === "success" ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <AlertCircle className="mt-0.5 size-4 shrink-0" />}
-          <p className="flex-1">{feedback.message}</p>
-          <button type="button" className="rounded-full p-0.5 opacity-70 hover:opacity-100" onClick={() => setFeedback(null)} aria-label="Dismiss message"><X className="size-4" /></button>
+          <p className="flex-1 leading-relaxed">{feedback.message}</p>
+          <button type="button" className="rounded-md p-0.5 opacity-70 hover:opacity-100" onClick={() => setFeedback(null)} aria-label="Dismiss message"><X className="size-3.5" /></button>
         </div>
       ) : null}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-        <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/15 bg-primary/[0.055] p-4 sm:p-5">
-          <div className="absolute -right-6 -top-7 size-24 rounded-full bg-primary/[0.06]" />
-          <div className="relative flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Expenses found</p>
-              <p className="mt-2 font-heading text-2xl font-semibold tracking-tight text-foreground">{loading ? "—" : totalCount.toLocaleString("en-IN")}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Matching the current filters</p>
-            </div>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Receipt className="size-5" /></span>
-          </div>
-        </div>
-        <div className="rounded-[1.35rem] border border-border/80 bg-card p-4 shadow-sm shadow-foreground/[0.025] sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Visible spend</p>
-              <p className="mt-2 font-heading text-2xl font-semibold tracking-tight text-foreground">{loading ? "—" : formatCurrency(visibleSpend)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Total on this page</p>
-            </div>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300"><Wallet className="size-5" /></span>
-          </div>
-        </div>
-        <div className="rounded-[1.35rem] border border-border/80 bg-card p-4 shadow-sm shadow-foreground/[0.025] sm:p-5 sm:col-span-2 xl:col-span-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Showing records</p>
-              <p className="mt-2 font-heading text-2xl font-semibold tracking-tight text-foreground">{loading ? "—" : expenses.length.toLocaleString("en-IN")} <span className="text-base font-medium text-muted-foreground">/ {totalCount.toLocaleString("en-IN")}</span></p>
-              <p className="mt-1 text-xs text-muted-foreground">Page {page} of {pageCount}</p>
-            </div>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-700 dark:text-sky-300"><CircleDollarSign className="size-5" /></span>
-          </div>
-        </div>
-      </div>
-
       {/* Search / filters */}
-      <section className="overflow-hidden rounded-[1.4rem] border border-border/80 bg-card shadow-sm shadow-foreground/[0.025]">
-        <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <section className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm shadow-foreground/[0.025]">
+        <div className="flex flex-col gap-2.5 border-b border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <div>
             <h2 className="font-heading text-base font-semibold text-foreground">Expense records</h2>
             <p className="mt-1 text-xs text-muted-foreground">Search descriptions, review receipts and manage each entry.</p>
@@ -563,24 +542,60 @@ export default function ExpensesPage() {
             <button type="submit" className="h-10 shrink-0 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">Search</button>
           </form>
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
           <button
             type="button"
             onClick={() => setFiltersOpen((open) => !open)}
             aria-expanded={filtersOpen}
-            className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition ${filtersOpen || hasFilters ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
+            className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition ${filtersOpen || fromDate || toDate ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
           >
-            <SlidersHorizontal className="size-3.5" /> Date filters <ChevronDown className={`size-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+            <CalendarDays className="size-4" /> Date range <ChevronDown className={`size-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
           </button>
           {search ? <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs text-foreground">Search: “{search}” <button type="button" onClick={() => { setSearch(""); setSearchInput(""); setPage(1); }} aria-label="Clear search"><X className="size-3" /></button></span> : null}
           {fromDate || toDate ? <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs text-foreground">{fromDate ? shortDate(fromDate) : "Any date"} – {toDate ? shortDate(toDate) : "Today"}<button type="button" onClick={() => { setFromDate(""); setToDate(""); setPage(1); }} aria-label="Clear date range"><X className="size-3" /></button></span> : null}
           {hasFilters ? <button type="button" onClick={clearFilters} className="ml-auto text-xs font-semibold text-primary hover:underline">Clear all</button> : null}
         </div>
         {filtersOpen ? (
-          <div className="grid grid-cols-1 gap-3 border-t border-border/60 bg-muted/20 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:px-5">
-            <label className="block text-xs font-medium text-muted-foreground">From date<input type="date" value={fromDate} max={toDate || todayLocalIso()} onChange={(event) => { setFromDate(event.target.value); setPage(1); }} className="mt-1.5 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10" /></label>
-            <label className="block text-xs font-medium text-muted-foreground">To date<input type="date" value={toDate} min={fromDate || "2000-01-01"} max={todayLocalIso()} onChange={(event) => { setToDate(event.target.value); setPage(1); }} className="mt-1.5 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10" /></label>
-            <button type="button" onClick={() => { setPage(1); setFiltersOpen(false); }} className="h-10 rounded-xl border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted">Apply dates</button>
+          <div className="grid grid-cols-1 gap-4 border-t border-border/60 bg-muted/10 p-4 sm:grid-cols-[190px_minmax(0,1fr)] sm:p-5">
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-1">
+              {["Today", "Yesterday", "Last 7 days", "Last 30 days", "Month to date", "Last month", "Year to date", "Last year"].map((preset) => (
+                <button key={preset} type="button" onClick={() => {
+                  const today = new Date();
+                  const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  const start = new Date(today);
+                  const end = new Date(today);
+                  if (preset === "Yesterday") { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+                  else if (preset === "Last 7 days") start.setDate(start.getDate() - 6);
+                  else if (preset === "Last 30 days") start.setDate(start.getDate() - 29);
+                  else if (preset === "Month to date") start.setDate(1);
+                  else if (preset === "Last month") { start.setMonth(start.getMonth() - 1, 1); end.setDate(0); }
+                  else if (preset === "Year to date") { start.setMonth(0, 1); }
+                  else if (preset === "Last year") { start.setFullYear(start.getFullYear() - 1, 0, 1); end.setFullYear(end.getFullYear() - 1, 11, 31); }
+                  setFromDate(iso(start)); setToDate(iso(end)); setPage(1); setFiltersOpen(false);
+                }} className="rounded-lg px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-primary/10 hover:text-primary">{preset}</button>
+              ))}
+            </div>
+            <div className="rounded-xl border border-border/80 bg-background p-3 sm:p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(calendarMonth)}</p>
+                <div className="flex items-center gap-1"><button type="button" aria-label="Previous month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted"><ChevronDown className="size-4 rotate-90" /></button><button type="button" aria-label="Next month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted"><ChevronDown className="size-4 -rotate-90" /></button></div>
+              </div>
+              <div className="grid grid-cols-7 text-center">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-2 text-[11px] font-medium text-muted-foreground">{day}</span>)}
+                {calendarDays.map((day) => {
+                  const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+                  const inMonth = day.getMonth() === calendarMonth.getMonth();
+                  const selected = iso === fromDate || iso === toDate;
+                  const inRange = Boolean(fromDate && toDate && iso > fromDate && iso < toDate);
+                  const disabled = iso > todayLocalIso();
+                  return <button key={iso} type="button" disabled={disabled} onClick={() => { if (!fromDate || (fromDate && toDate)) { setFromDate(iso); setToDate(""); } else if (iso < fromDate) { setFromDate(iso); } else { setToDate(iso); } setPage(1); }} className={`mx-auto my-0.5 flex aspect-square w-full max-w-9 items-center justify-center rounded-lg text-xs transition ${selected ? "bg-primary text-primary-foreground font-bold" : inRange ? "bg-primary/10 text-primary" : inMonth ? "text-foreground hover:bg-muted" : "text-muted-foreground/40"} ${disabled ? "cursor-not-allowed opacity-30" : ""}`}>{day.getDate()}</button>;
+                })}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted/50 px-3 py-2"><p className="text-[10px] text-muted-foreground">From</p><p className="mt-0.5 text-xs font-semibold text-foreground">{fromDate ? shortDate(fromDate) : "Select start"}</p></div>
+                <div className="rounded-lg bg-muted/50 px-3 py-2"><p className="text-[10px] text-muted-foreground">To</p><p className="mt-0.5 text-xs font-semibold text-foreground">{toDate ? shortDate(toDate) : "Select end"}</p></div>
+              </div>
+              <div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => { setFromDate(""); setToDate(""); setPage(1); }} className="h-9 rounded-lg px-3 text-xs font-semibold text-muted-foreground hover:bg-muted">Clear</button><button type="button" onClick={() => { setPage(1); setFiltersOpen(false); }} className="h-9 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90">Apply range</button></div>
+            </div>
           </div>
         ) : null}
 
@@ -589,7 +604,7 @@ export default function ExpensesPage() {
           <table className="w-full min-w-[760px] border-collapse text-left">
             <thead>
               <tr className="bg-muted/25 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                <th className="px-5 py-3.5">Expense</th>
+                <th className="px-4 py-2.5">Expense</th>
                 <th className="px-4 py-3.5">Date</th>
                 <th className="px-4 py-3.5">Receipt</th>
                 <th className="px-4 py-3.5 text-right">Amount</th>
@@ -598,12 +613,16 @@ export default function ExpensesPage() {
             </thead>
             <tbody className="divide-y divide-border/60">
               {loading ? Array.from({ length: 5 }).map((_, index) => (
-                <tr key={`loading-${index}`}>
-                  <td colSpan={5} className="px-5 py-4"><div className="h-10 animate-pulse rounded-xl bg-muted/70" /></td>
+                <tr key={`loading-${index}`} className="border-b border-border/50 last:border-0">
+                  <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="size-10 animate-pulse rounded-xl bg-muted/70" /><div className="flex-1 space-y-2"><div className="h-3 w-3/4 animate-pulse rounded bg-muted/70" /><div className="h-2.5 w-1/3 animate-pulse rounded bg-muted/50" /></div></div></td>
+                  <td className="px-4 py-3"><div className="h-3 w-20 animate-pulse rounded bg-muted/70" /></td>
+                  <td className="px-4 py-3"><div className="h-7 w-28 animate-pulse rounded-full bg-muted/70" /></td>
+                  <td className="px-4 py-3"><div className="ml-auto h-3 w-16 animate-pulse rounded bg-muted/70" /></td>
+                  <td className="px-4 py-3"><div className="ml-auto h-8 w-24 animate-pulse rounded-full bg-muted/50" /></td>
                 </tr>
               )) : expenses.map((expense) => (
                 <tr key={expense.id} className="group transition-colors hover:bg-primary/[0.025]">
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/[0.07] text-primary"><Receipt className="size-[18px]" /></span>
                       <div className="min-w-0">
@@ -612,15 +631,15 @@ export default function ExpensesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(expense.expenseDate)}</td>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(expense.expenseDate)}</td>
+                  <td className="px-4 py-3">
                     <button type="button" onClick={() => void openDetails(expense)} className="inline-flex max-w-[180px] items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/30 hover:text-primary" title={expense.billFileName}>
                       {expense.billFileName?.toLowerCase().endsWith(".pdf") ? <FileText className="size-3.5 shrink-0" /> : <FileImage className="size-3.5 shrink-0" />}
                       <span className="truncate">{expense.billFileName || "View bill"}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-4 text-right text-sm font-semibold tabular-nums text-foreground">{formatCurrency(expense.amount)}</td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums text-foreground">{formatCurrency(expense.amount)}</td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <ActionButton label="View details" onClick={() => void openDetails(expense)}><Eye className="size-4" /></ActionButton>
                       <ActionButton label="Edit expense" onClick={() => openEditForm(expense)}><Pencil className="size-4" /></ActionButton>
@@ -629,7 +648,7 @@ export default function ExpensesPage() {
                   </td>
                 </tr>
               ))}
-              {!loading && expenses.length === 0 ? <tr><td colSpan={5} className="px-5 py-16 text-center"><EmptyState hasFilters={hasFilters} onAdd={openCreateForm} onClear={clearFilters} /></td></tr> : null}
+              {!loading && expenses.length === 0 ? <tr><td colSpan={5} className="px-5 py-16 text-center"><EmptyState hasFilters={hasFilters} onClear={clearFilters} /></td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -637,7 +656,7 @@ export default function ExpensesPage() {
         {/* Mobile cards */}
         <div className="divide-y divide-border/60 md:hidden">
           {loading ? Array.from({ length: 4 }).map((_, index) => <div key={`mobile-loading-${index}`} className="p-4"><div className="h-24 animate-pulse rounded-2xl bg-muted/70" /></div>) : expenses.map((expense) => (
-            <article key={expense.id} className="p-4 transition-colors active:bg-muted/30">
+            <article key={expense.id} className="p-3 transition-colors active:bg-muted/30">
               <div className="flex items-start gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/[0.07] text-primary"><Receipt className="size-[18px]" /></span>
                 <div className="min-w-0 flex-1">
@@ -648,7 +667,7 @@ export default function ExpensesPage() {
                     </div>
                     <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{formatCurrency(expense.amount)}</p>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="mt-2 flex items-center justify-between gap-2">
                     <button type="button" onClick={() => void openDetails(expense)} className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-primary"><FileText className="size-3.5 shrink-0" /><span className="max-w-[145px] truncate">{expense.billFileName || "View receipt"}</span><Eye className="size-3.5 shrink-0" /></button>
                     <div className="flex shrink-0 items-center gap-1">
                       <ActionButton label="View details" onClick={() => void openDetails(expense)}><Eye className="size-4" /></ActionButton>
@@ -660,11 +679,11 @@ export default function ExpensesPage() {
               </div>
             </article>
           ))}
-          {!loading && expenses.length === 0 ? <div className="px-4 py-12 text-center"><EmptyState hasFilters={hasFilters} onAdd={openCreateForm} onClear={clearFilters} /></div> : null}
+          {!loading && expenses.length === 0 ? <div className="px-4 py-12 text-center"><EmptyState hasFilters={hasFilters} onClear={clearFilters} /></div> : null}
         </div>
 
         {/* Pagination */}
-        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.13] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.13] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-xs text-muted-foreground">
             {totalCount === 0 ? "No records to show" : <>Showing <span className="font-semibold text-foreground">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)}</span> of <span className="font-semibold text-foreground">{totalCount}</span> expenses</>}
           </p>
@@ -676,7 +695,7 @@ export default function ExpensesPage() {
         </div>
       </section>
 
-      <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3.5">
+      <div className="flex items-start gap-2.5 rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
         <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
         <p className="text-xs leading-relaxed text-muted-foreground">Receipts are stored with each expense. Use the details view to preview or download the original bill; replacing a receipt is optional when editing.</p>
       </div>
@@ -691,7 +710,18 @@ export default function ExpensesPage() {
           <form onSubmit={submitExpense} className="space-y-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-foreground">Expense date <span className="text-primary">*</span>
-                <span className="relative mt-1.5 block"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input type="date" name="expenseDate" value={formValues.expenseDate} min="2000-01-01" max={todayLocalIso()} onChange={(event) => updateFormField("expenseDate", event.target.value)} required className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm outline-none transition focus:border-primary/60 focus:ring-4 focus:ring-primary/10" /></span>
+                <span className="relative mt-1.5 block">
+                  <button type="button" onClick={() => { const selected = formValues.expenseDate ? new Date(`${formValues.expenseDate}T00:00:00`) : new Date(); setExpenseCalendarMonth(new Date(selected.getFullYear(), selected.getMonth(), 1)); setExpenseDatePickerOpen((open) => !open); }} className="flex h-11 w-full items-center gap-2 rounded-xl border border-input bg-background px-3 text-left text-sm outline-none transition hover:border-primary/50 focus:border-primary/60 focus:ring-4 focus:ring-primary/10">
+                    <CalendarDays className="size-4 text-primary" /><span className="flex-1">{formValues.expenseDate ? formatDate(formValues.expenseDate) : "Choose expense date"}</span><ChevronDown className={`size-4 text-muted-foreground transition-transform ${expenseDatePickerOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {expenseDatePickerOpen ? <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-[min(21rem,calc(100vw-3rem))] rounded-2xl border border-border bg-background p-3 shadow-xl">
+                    <div className="mb-2 flex items-center justify-between gap-2"><button type="button" aria-label="Previous month" onClick={() => setExpenseCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted"><ChevronDown className="size-4 rotate-90" /></button><p className="text-sm font-semibold">{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(expenseCalendarMonth)}</p><button type="button" aria-label="Next month" disabled={expenseCalendarMonth.getFullYear() === new Date().getFullYear() && expenseCalendarMonth.getMonth() >= new Date().getMonth()} onClick={() => setExpenseCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"><ChevronDown className="size-4 -rotate-90" /></button></div>
+                    <div className="grid grid-cols-7 text-center">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-1.5 text-[10px] font-medium text-muted-foreground">{day}</span>)}
+                      {expenseCalendarDays.map((day) => { const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`; const selected = iso === formValues.expenseDate; const inMonth = day.getMonth() === expenseCalendarMonth.getMonth(); const disabled = iso > todayLocalIso(); return <button key={iso} type="button" disabled={disabled} onClick={() => { updateFormField("expenseDate", iso); setExpenseDatePickerOpen(false); }} className={`mx-auto my-0.5 flex aspect-square w-full max-w-9 items-center justify-center rounded-lg text-xs ${selected ? "bg-primary font-bold text-primary-foreground" : inMonth ? "text-foreground hover:bg-muted" : "text-muted-foreground/40"} ${disabled ? "cursor-not-allowed opacity-30" : ""}`}>{day.getDate()}</button>; })}
+                    </div>
+                    <div className="mt-2 flex justify-end border-t border-border pt-2"><button type="button" onClick={() => { updateFormField("expenseDate", todayLocalIso()); setExpenseDatePickerOpen(false); }} className="rounded-lg px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10">Today</button></div>
+                  </div> : null}
+                </span>
               </label>
               <label className="block text-sm font-medium text-foreground">Amount (INR) <span className="text-primary">*</span>
                 <span className="relative mt-1.5 block"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">₹</span><input type="number" name="amount" min="0.01" max="9999999.99" step="0.01" inputMode="decimal" value={formValues.amount} onChange={(event) => updateFormField("amount", event.target.value)} required placeholder="0.00" className="h-11 w-full rounded-xl border border-input bg-background pl-8 pr-3 text-sm outline-none transition focus:border-primary/60 focus:ring-4 focus:ring-primary/10" /></span>
@@ -710,7 +740,7 @@ export default function ExpensesPage() {
             {formError ? <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/[0.06] px-3.5 py-3 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" /><span>{formError}</span></div> : null}
             <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setFormOpen(false)} disabled={saving} className="h-10 rounded-full border border-border bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:opacity-50">Cancel</button>
-              <button type="submit" disabled={saving} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-60">
+              <button type="submit" disabled={saving} className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-60">
                 {saving ? <LoaderCircle className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
                 {saving ? "Saving…" : editingExpense ? "Save changes" : "Create expense"}
               </button>
@@ -771,7 +801,7 @@ export default function ExpensesPage() {
                 <button type="button" onClick={() => void deleteExpense(activeExpense)} className="inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-destructive transition hover:bg-destructive/10"><Trash2 className="size-4" /> Delete expense</button>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <button type="button" onClick={() => { setDetailsOpen(false); setBillPreview(null); }} className="h-10 rounded-full border border-border bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted">Close</button>
-                  <button type="button" onClick={() => { setDetailsOpen(false); setBillPreview(null); openEditForm(activeExpense); }} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"><Pencil className="size-4" /> Edit expense</button>
+                  <button type="button" onClick={() => { setDetailsOpen(false); setBillPreview(null); openEditForm(activeExpense); }} className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"><Pencil className="size-4" /> Edit expense</button>
                 </div>
               </div>
             </div>
@@ -808,11 +838,9 @@ function ActionButton({
 
 function EmptyState({
   hasFilters,
-  onAdd,
   onClear,
 }: {
   hasFilters: boolean;
-  onAdd: () => void;
   onClear: () => void;
 }) {
   return (
@@ -820,7 +848,7 @@ function EmptyState({
       <span className="flex size-14 items-center justify-center rounded-2xl border border-primary/10 bg-primary/[0.07] text-primary"><Receipt className="size-6" /></span>
       <h3 className="mt-4 text-sm font-semibold text-foreground">{hasFilters ? "No matching expenses" : "Your expense list is empty"}</h3>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{hasFilters ? "Try a different search or date range." : "Add your first expense and attach its receipt to get started."}</p>
-      {hasFilters ? <button type="button" onClick={onClear} className="mt-4 text-xs font-semibold text-primary hover:underline">Clear filters</button> : <button type="button" onClick={onAdd} className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"><Plus className="size-3.5" /> Add expense</button>}
+      {hasFilters ? <button type="button" onClick={onClear} className="mt-4 text-xs font-semibold text-primary hover:underline">Clear filters</button> : null}
     </div>
   );
 }

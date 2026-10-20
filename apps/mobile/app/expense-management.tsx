@@ -35,16 +35,15 @@ import {
   Receipt,
   RefreshCw,
   Search,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   UploadCloud,
-  Wallet,
   X,
 } from "lucide-react-native";
 import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
 import { getApiBaseUrl, getAuthToken, mobileApiClient } from "../lib/api-client";
+import * as Sharing from "expo-sharing";
 
 type Expense = {
   id: number;
@@ -154,14 +153,41 @@ async function fetchBillResponse(expense: Expense) {
   return response;
 }
 
+
 async function openBillInNativeViewer(expense: Expense) {
   const response = await fetchBillResponse(expense);
-  const contentType = response.headers.get("content-type") || mimeFromName(expense.billFileName);
-  const safeName = (expense.billFileName || `expense-${expense.id}-bill`).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const previewFile = new File(Paths.cache, `expense-${expense.id}-${Date.now()}-${safeName}`);
-  await previewFile.write(new Uint8Array(await response.arrayBuffer()));
-  await previewFile.preview({ mimeType: contentType, title: safeName });
+
+  const contentType =
+    response.headers.get("content-type") ||
+    mimeFromName(expense.billFileName);
+
+  const safeName = (
+    expense.billFileName || `expense-${expense.id}-bill`
+  ).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  const previewFile = new File(
+    Paths.cache,
+    `${expense.id}-${Date.now()}-${safeName}`
+  );
+
+  await previewFile.write(
+    new Uint8Array(await response.arrayBuffer())
+  );
+
+  const canShare = await Sharing.isAvailableAsync();
+
+  if (!canShare) {
+    throw new Error(
+      "Native file sharing is not available on this device."
+    );
+  }
+
+  await Sharing.shareAsync(previewFile.uri, {
+    mimeType: contentType,
+    dialogTitle: safeName,
+  });
 }
+
 
 async function openBillInBrowser(expense: Expense) {
   const response = await fetchBillResponse(expense);
@@ -191,6 +217,8 @@ export default function ExpenseManagementScreen() {
   const [toDate, setToDate] = useState("");
 
   const [formVisible, setFormVisible] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [editing, setEditing] = useState<Expense | null>(null);
   const [formValues, setFormValues] = useState<ExpenseFormValues>({ expenseDate: localIsoToday(), amount: "", categoryNotes: "" });
   const [selectedBill, setSelectedBill] = useState<SelectedBill | null>(null);
@@ -236,6 +264,16 @@ export default function ExpenseManagementScreen() {
   const visibleSpend = useMemo(() => expenses.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0), [expenses]);
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const hasFilters = Boolean(search || fromDate || toDate);
+  const calendarCells = useMemo(() => {
+    const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      return day;
+    });
+  }, [calendarMonth]);
 
   const newExpense = () => {
     setEditing(null);
@@ -406,9 +444,7 @@ export default function ExpenseManagementScreen() {
           </TouchableOpacity>
           <View style={styles.headingIcon}><Receipt size={19} color={PRIMARY} /></View>
           <View style={styles.headingTextWrap}>
-            <Text style={styles.eyebrow}>ATELIER OPERATIONS</Text>
             <Text style={styles.title}>Expense management</Text>
-            <Text style={styles.subtitle}>Purchases, receipts and studio spend.</Text>
           </View>
         </View>
 
@@ -431,27 +467,14 @@ export default function ExpenseManagementScreen() {
           </View>
         ) : null}
 
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryLabelRow}><Text style={styles.summaryLabel}>Expenses found</Text><Receipt size={16} color={PRIMARY} /></View>
-            <Text style={styles.summaryValue}>{pageLoading ? "—" : totalCount.toLocaleString("en-IN")}</Text>
-            <Text style={styles.summaryHint}>Matches your filters</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryLabelRow}><Text style={styles.summaryLabel}>Visible spend</Text><Wallet size={16} color="#b45309" /></View>
-            <Text style={styles.summaryValue}>{pageLoading ? "—" : money(visibleSpend)}</Text>
-            <Text style={styles.summaryHint}>Current page total</Text>
-          </View>
-        </View>
-
         <View style={styles.listHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.sectionTitle}>Expense records</Text>
             <Text style={styles.sectionHint}>Search entries and manage receipts.</Text>
           </View>
           <TouchableOpacity style={[styles.filterButton, filtersVisible && styles.filterButtonActive]} onPress={() => setFiltersVisible((visible) => !visible)}>
-            <SlidersHorizontal size={15} color={filtersVisible ? PRIMARY : MUTED} />
-            <Text style={[styles.filterButtonText, filtersVisible && styles.filterButtonTextActive]}>Filters</Text>
+            <CalendarDays size={15} color={filtersVisible ? PRIMARY : MUTED} />
+            <Text style={[styles.filterButtonText, filtersVisible && styles.filterButtonTextActive]}>Date range</Text>
             <ChevronDown size={14} color={filtersVisible ? PRIMARY : MUTED} />
           </TouchableOpacity>
         </View>
@@ -476,13 +499,44 @@ export default function ExpenseManagementScreen() {
 
         {filtersVisible ? (
           <View style={styles.filterPanel}>
-            <Text style={styles.fieldLabel}>From date (YYYY-MM-DD)</Text>
-            <TextInput value={fromDraft} onChangeText={setFromDraft} placeholder="2026-01-01" placeholderTextColor="#94a3b8" style={styles.filterInput} autoCapitalize="none" />
-            <Text style={styles.fieldLabel}>To date (YYYY-MM-DD)</Text>
-            <TextInput value={toDraft} onChangeText={setToDraft} placeholder={localIsoToday()} placeholderTextColor="#94a3b8" style={styles.filterInput} autoCapitalize="none" />
+            <Text style={styles.fieldLabel}>Quick ranges</Text>
+            <View style={styles.datePresetGrid}>
+              {["Today", "Yesterday", "Last 7 days", "Last 30 days", "Month to date", "Last month", "Year to date", "Last year"].map((preset) => (
+                <TouchableOpacity key={preset} style={styles.datePreset} onPress={() => {
+                  const today = new Date(); const start = new Date(today); const end = new Date(today);
+                  if (preset === "Yesterday") { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+                  else if (preset === "Last 7 days") start.setDate(start.getDate() - 6);
+                  else if (preset === "Last 30 days") start.setDate(start.getDate() - 29);
+                  else if (preset === "Month to date") start.setDate(1);
+                  else if (preset === "Last month") { start.setMonth(start.getMonth() - 1, 1); end.setDate(0); }
+                  else if (preset === "Year to date") start.setMonth(0, 1);
+                  else if (preset === "Last year") { start.setFullYear(start.getFullYear() - 1, 0, 1); end.setFullYear(end.getFullYear() - 1, 11, 31); }
+                  const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  setFromDraft(iso(start)); setToDraft(iso(end)); setFromDate(iso(start)); setToDate(iso(end)); setPage(1); setFiltersVisible(false);
+                }}><Text style={styles.datePresetText}>{preset}</Text></TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.filterCalendar}>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity style={styles.calendarNav} onPress={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}><ChevronLeft size={16} color={TEXT} /></TouchableOpacity>
+                <Text style={styles.calendarMonthTitle}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(calendarMonth)}</Text>
+                <TouchableOpacity style={styles.calendarNav} onPress={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}><ChevronRight size={16} color={TEXT} /></TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekRow}>{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <Text key={day} style={styles.calendarWeekday}>{day}</Text>)}</View>
+              <View style={styles.calendarGrid}>{calendarCells.map((day) => {
+                const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+                const selected = iso === fromDraft || iso === toDraft;
+                const inRange = Boolean(fromDraft && toDraft && iso > fromDraft && iso < toDraft);
+                const disabled = iso > localIsoToday();
+                return <TouchableOpacity key={iso} disabled={disabled} style={[styles.calendarDay, day.getMonth() !== calendarMonth.getMonth() && styles.calendarDayOutside, selected && styles.calendarDaySelected, inRange && styles.calendarRangeDay, disabled && styles.calendarDayDisabled]} onPress={() => { if (!fromDraft || (fromDraft && toDraft)) { setFromDraft(iso); setToDraft(""); } else if (iso < fromDraft) setFromDraft(iso); else setToDraft(iso); }}><Text style={[styles.calendarDayText, day.getMonth() !== calendarMonth.getMonth() && styles.calendarDayOutsideText, selected && styles.calendarDaySelectedText, disabled && styles.calendarDayDisabledText]}>{day.getDate()}</Text></TouchableOpacity>;
+              })}</View>
+            </View>
+            <Text style={styles.fieldLabel}>Custom range · YYYY-MM-DD</Text>
+            <TextInput value={fromDraft} onChangeText={setFromDraft} placeholder="From date" placeholderTextColor="#94a3b8" style={styles.filterInput} autoCapitalize="none" />
+            <TextInput value={toDraft} onChangeText={setToDraft} placeholder="To date" placeholderTextColor="#94a3b8" style={styles.filterInput} autoCapitalize="none" />
             <View style={styles.filterActions}>
               <TouchableOpacity onPress={clearFilters} style={styles.filterClear}><Text style={styles.filterClearText}>Clear all</Text></TouchableOpacity>
-              <TouchableOpacity onPress={applySearchAndDates} style={styles.applyButton}><Text style={styles.applyButtonText}>Apply filters</Text></TouchableOpacity>
+              <TouchableOpacity onPress={applySearchAndDates} style={styles.applyButton}><Text style={styles.applyButtonText}>Apply range</Text></TouchableOpacity>
             </View>
           </View>
         ) : null}
@@ -494,7 +548,7 @@ export default function ExpenseManagementScreen() {
             <View style={styles.emptyIcon}><Receipt size={25} color={PRIMARY} /></View>
             <Text style={styles.emptyTitle}>{hasFilters ? "No matching expenses" : "Your expense list is empty"}</Text>
             <Text style={styles.emptyText}>{hasFilters ? "Try a different search or date range." : "Add your first expense and attach its receipt."}</Text>
-            {hasFilters ? <TouchableOpacity style={styles.emptyAction} onPress={clearFilters}><Text style={styles.emptyActionText}>Clear filters</Text></TouchableOpacity> : <TouchableOpacity style={styles.emptyAction} onPress={newExpense}><Plus size={15} color="#ffffff" /><Text style={styles.emptyActionText}>Add expense</Text></TouchableOpacity>}
+            {hasFilters ? <TouchableOpacity style={styles.emptyAction} onPress={clearFilters}><Text style={styles.emptyActionText}>Clear filters</Text></TouchableOpacity> : null}
           </View>
         ) : (
           <View style={styles.expenseList}>
@@ -546,7 +600,11 @@ export default function ExpenseManagementScreen() {
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalBody}>
               <Text style={styles.fieldLabel}>Expense date *</Text>
-              <View style={styles.inputIconRow}><CalendarDays size={17} color={MUTED} /><TextInput value={formValues.expenseDate} onChangeText={(expenseDate) => setFormValues((old) => ({ ...old, expenseDate }))} placeholder="YYYY-MM-DD" style={styles.textInputWithIcon} autoCapitalize="none" maxLength={10} /></View>
+              <TouchableOpacity style={styles.inputIconRow} activeOpacity={0.8} onPress={() => { const selected = formValues.expenseDate ? new Date(`${formValues.expenseDate}T00:00:00`) : new Date(); setCalendarMonth(new Date(selected.getFullYear(), selected.getMonth(), 1)); setDatePickerVisible(true); }}>
+                <CalendarDays size={17} color={PRIMARY} />
+                <Text style={styles.textInputWithIcon}>{formValues.expenseDate ? displayDate(formValues.expenseDate) : "Choose expense date"}</Text>
+                <ChevronDown size={15} color={MUTED} />
+              </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>Amount (INR) *</Text>
               <View style={styles.inputIconRow}><Text style={styles.rupeeIcon}>₹</Text><TextInput value={formValues.amount} onChangeText={(amount) => setFormValues((old) => ({ ...old, amount }))} placeholder="0.00" keyboardType="decimal-pad" style={styles.textInputWithIcon} /></View>
@@ -582,6 +640,34 @@ export default function ExpenseManagementScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Calendar 14 style date picker */}
+      <Modal visible={datePickerVisible} animationType="fade" transparent onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={styles.calendarBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDatePickerVisible(false)} />
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity style={styles.calendarNav} onPress={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} accessibilityLabel="Previous month"><ChevronLeft size={18} color={TEXT} /></TouchableOpacity>
+              <Text style={styles.calendarMonthTitle}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(calendarMonth)}</Text>
+              <TouchableOpacity style={styles.calendarNav} onPress={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} accessibilityLabel="Next month" disabled={calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() >= new Date().getMonth()}><ChevronRight size={18} color={TEXT} /></TouchableOpacity>
+            </View>
+            <View style={styles.calendarWeekRow}>{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <Text key={day} style={styles.calendarWeekday}>{day}</Text>)}</View>
+            <View style={styles.calendarGrid}>
+              {calendarCells.map((day) => {
+                const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+                const inMonth = day.getMonth() === calendarMonth.getMonth();
+                const selected = iso === formValues.expenseDate;
+                const disabled = iso > localIsoToday();
+                return <TouchableOpacity key={iso} disabled={disabled} style={[styles.calendarDay, !inMonth && styles.calendarDayOutside, selected && styles.calendarDaySelected, disabled && styles.calendarDayDisabled]} onPress={() => { setFormValues((old) => ({ ...old, expenseDate: iso })); setDatePickerVisible(false); }}><Text style={[styles.calendarDayText, !inMonth && styles.calendarDayOutsideText, selected && styles.calendarDaySelectedText, disabled && styles.calendarDayDisabledText]}>{day.getDate()}</Text></TouchableOpacity>;
+              })}
+            </View>
+            <View style={styles.calendarFooter}>
+              <TouchableOpacity onPress={() => setDatePickerVisible(false)} style={styles.filterClear}><Text style={styles.filterClearText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { setFormValues((old) => ({ ...old, expenseDate: localIsoToday() })); setCalendarMonth(new Date()); setDatePickerVisible(false); }} style={styles.applyButton}><Text style={styles.applyButtonText}>Today</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Expense details */}
@@ -632,7 +718,7 @@ const styles = StyleSheet.create({
   headingIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#fff1f2", borderWidth: 1, borderColor: "#ffe4e6" },
   headingTextWrap: { flex: 1 },
   eyebrow: { color: PRIMARY, letterSpacing: 1.5, fontSize: 9, fontWeight: "800", marginBottom: 4 },
-  title: { color: TEXT, fontSize: 22, lineHeight: 27, letterSpacing: -0.6, fontWeight: "800" },
+  title: { color: TEXT, fontSize: 19, lineHeight: 24, letterSpacing: -0.4, fontWeight: "800" },
   subtitle: { color: MUTED, fontSize: 12, marginTop: 4 },
   topActions: { flexDirection: "row", gap: 9 },
   primaryButton: { minHeight: 42, flex: 1.15, paddingHorizontal: 14, borderRadius: 22, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
@@ -645,12 +731,6 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, fontSize: 11, lineHeight: 16 },
   noticeSuccessText: { color: "#047857" },
   noticeErrorText: { color: "#be123c" },
-  summaryRow: { flexDirection: "row", gap: 10 },
-  summaryCard: { flex: 1, minWidth: 0, backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: 18, padding: 13, shadowColor: "#0f172a", shadowOpacity: 0.025, shadowOffset: { width: 0, height: 2 }, shadowRadius: 5, elevation: 1 },
-  summaryLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 3 },
-  summaryLabel: { color: MUTED, fontSize: 10, fontWeight: "600", flexShrink: 1 },
-  summaryValue: { color: TEXT, fontSize: 19, fontWeight: "800", letterSpacing: -0.4, marginTop: 10 },
-  summaryHint: { color: MUTED, fontSize: 9, marginTop: 4 },
   listHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   sectionTitle: { color: TEXT, fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
   sectionHint: { color: MUTED, fontSize: 11, marginTop: 3 },
@@ -664,6 +744,28 @@ const styles = StyleSheet.create({
   searchSubmit: { height: 42, borderRadius: 13, paddingHorizontal: 17, justifyContent: "center", alignItems: "center", backgroundColor: "#ffe4e6" },
   searchSubmitText: { color: "#be123c", fontSize: 12, fontWeight: "800" },
   filterPanel: { backgroundColor: SURFACE, borderRadius: 16, borderColor: BORDER, borderWidth: 1, padding: 13, gap: 7 },
+  datePresetGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 5 },
+  datePreset: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 8, backgroundColor: BACKGROUND },
+  datePresetText: { color: TEXT, fontSize: 11, fontWeight: "500" },
+  filterCalendar: { borderWidth: 1, borderColor: BORDER, borderRadius: 13, padding: 9, marginTop: 4, backgroundColor: BACKGROUND },
+  calendarRangeDay: { backgroundColor: "#ffe4e6" },
+  calendarBackdrop: { flex: 1, justifyContent: "center", alignItems: "center", padding: 18, backgroundColor: "rgba(15,23,42,0.35)" },
+  calendarCard: { width: "100%", maxWidth: 360, borderRadius: 20, borderWidth: 1, borderColor: BORDER, padding: 15, backgroundColor: SURFACE, shadowColor: "#0f172a", shadowOpacity: 0.12, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
+  calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  calendarNav: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: BACKGROUND },
+  calendarMonthTitle: { color: TEXT, fontSize: 14, fontWeight: "800" },
+  calendarWeekRow: { flexDirection: "row", marginBottom: 5 },
+  calendarWeekday: { flex: 1, textAlign: "center", color: MUTED, fontSize: 11, paddingVertical: 7 },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  calendarDay: { width: "14.2857%", aspectRatio: 1.05, alignItems: "center", justifyContent: "center", borderRadius: 10 },
+  calendarDayOutside: { opacity: 0.4 },
+  calendarDaySelected: { backgroundColor: PRIMARY },
+  calendarDayDisabled: { opacity: 0.25 },
+  calendarDayText: { color: TEXT, fontSize: 12, fontWeight: "600" },
+  calendarDayOutsideText: { color: MUTED },
+  calendarDaySelectedText: { color: "#ffffff", fontWeight: "800" },
+  calendarDayDisabledText: { color: MUTED },
+  calendarFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: BORDER, marginTop: 12, paddingTop: 10 },
   fieldLabel: { color: TEXT, fontSize: 12, fontWeight: "700", marginTop: 5, marginBottom: 1 },
   filterInput: { height: 41, backgroundColor: BACKGROUND, borderWidth: 1, borderColor: BORDER, borderRadius: 11, paddingHorizontal: 11, fontSize: 12, color: TEXT },
   filterActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },

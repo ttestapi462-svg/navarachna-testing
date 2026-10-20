@@ -29,6 +29,7 @@ import {
   Layers,
   LayoutDashboard,
   ShoppingBag,
+  Receipt,
   Users,
   Palette,
   TrendingUp,
@@ -67,6 +68,11 @@ const navigationStructure: NavItem[] = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Expenses",
+    url: "/expenses",
+    icon: Receipt,
   },
   {
     title: "Couture Orders",

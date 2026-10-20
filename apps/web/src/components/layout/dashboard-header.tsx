@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -25,7 +26,13 @@ import { LogoutConfirmationDialog } from "./logout-confirmation-dialog";
 
 export function DashboardHeader() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const pageTitle = pathname === "/expenses"
+    ? "Expenses"
+    : pathname === "/"
+      ? "Dashboard"
+      : pathname.split("/").filter(Boolean).pop()?.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Dashboard";
 
   const initials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase() || "NA";
   const fullName = `${user?.firstName || "Studio"} ${user?.lastName || "Admin"}`.trim();
@@ -40,7 +47,7 @@ export function DashboardHeader() {
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbPage className="text-xs font-semibold text-foreground tracking-tight">
-                Dashboard
+                {pageTitle}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
