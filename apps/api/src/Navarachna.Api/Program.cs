@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using EmployeeApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -27,18 +28,19 @@ builder.Services.AddHostedService<TokenCleanupWorker>();
 // Employee Management services; authentication remains the original Navarachna implementation.
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<DocumentService>();
-if (builder.Configuration["Storage:Provider"] == "Blob")
-    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
-else
-    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 
-// Employee Management services; authentication remains the original Navarachna implementation.
-builder.Services.AddScoped<EmployeeService>();
-builder.Services.AddScoped<DocumentService>();
-if (builder.Configuration["Storage:Provider"] == "Blob")
+var storageProvider = builder.Configuration["Storage:Provider"];
+var hasBlobCredentials = !string.IsNullOrWhiteSpace(builder.Configuration["Storage:Blob:ConnectionString"]) 
+    || !string.IsNullOrWhiteSpace(builder.Configuration["Storage:Blob:AccountUrl"]);
+
+if (string.Equals(storageProvider, "Blob", StringComparison.OrdinalIgnoreCase) && hasBlobCredentials)
+{
     builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+}
 else
+{
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+}
 
 // 3. Add Controllers
 builder.Services.AddControllers();

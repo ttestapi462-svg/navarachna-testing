@@ -2,14 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from "@/components/ui/breadcrumb";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,32 +14,54 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/reui/badge";
 import { useAuth } from "@/context/dashboard-auth-context";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { LogoutConfirmationDialog } from "./logout-confirmation-dialog";
 
+function getHeaderConfig(pathname: string) {
+  if (pathname.startsWith("/employees")) {
+    return {
+      title: "Employee List",
+      category: "Employee Management",
+    };
+  }
+  return {
+    title: "Atelier Dashboard",
+    category: "Overview",
+  };
+}
+
 export function DashboardHeader() {
   const { user } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const pathname = usePathname();
 
   const initials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase() || "NA";
   const fullName = `${user?.firstName || "Studio"} ${user?.lastName || "Admin"}`.trim();
 
+  const headerConfig = getHeaderConfig(pathname);
+
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 sm:px-6 backdrop-blur-md select-none">
-      {/* 1. Left: Mobile/Tablet Sidebar Drawer Trigger & Page Title */}
+      {/* 1. Left: Mobile/Tablet Sidebar Drawer Trigger & Dynamic Page Title */}
       <div className="flex items-center gap-3">
         <SidebarTrigger className="-ml-1 size-8 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" />
-        <Separator orientation="vertical" className="h-4 my-auto self-center bg-border/80" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbPage className="text-xs font-semibold text-foreground tracking-tight">
-                Dashboard
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <Separator orientation="vertical" className="h-5 my-auto self-center bg-border/80" />
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg sm:text-xl font-bold text-foreground tracking-tight">
+            {headerConfig.title}
+          </h1>
+          {headerConfig.category && (
+            <Badge
+              variant="outline"
+              size="default"
+              className="hidden sm:inline-flex font-medium text-muted-foreground border-border/70 bg-muted/30"
+            >
+              {headerConfig.category}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* 2. Right: Authenticated User Profile */}
@@ -54,10 +71,10 @@ export function DashboardHeader() {
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2.5 rounded-full pl-2.5 pr-1.5 py-1 hover:bg-muted/60 transition-colors border border-transparent hover:border-border/60 cursor-pointer outline-none">
                 <div className="text-right hidden sm:block leading-tight">
-                  <p className="text-xs font-semibold text-foreground tracking-tight">
+                  <p className="text-sm font-semibold text-foreground tracking-tight">
                     {fullName}
                   </p>
-                  <p className="text-[10px] text-muted-foreground font-medium">
+                  <p className="text-xs text-muted-foreground font-medium">
                     @{user.username}
                   </p>
                 </div>

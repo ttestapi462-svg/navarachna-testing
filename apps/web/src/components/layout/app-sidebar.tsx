@@ -30,6 +30,7 @@ import {
   LayoutDashboard,
   ShoppingBag,
   Users,
+  UsersRound,
   Palette,
   TrendingUp,
   ChevronRight,
@@ -67,6 +68,18 @@ const navigationStructure: NavItem[] = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Employee Management",
+    icon: UsersRound,
+    defaultOpen: true,
+    items: [
+      {
+        title: "Employee List",
+        url: "/employees",
+        icon: UserCheck,
+      },
+    ],
   },
   {
     title: "Couture Orders",

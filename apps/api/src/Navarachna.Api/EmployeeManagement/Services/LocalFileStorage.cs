@@ -10,8 +10,29 @@ public interface IFileStorage
 public class LocalFileStorage(IConfiguration cfg) : IFileStorage
 {
     // Keep this OUTSIDE wwwroot. Used when Storage:Provider is not "Blob".
-    private readonly string _root = cfg["Storage:Root"]
-        ?? Path.Combine(AppContext.BaseDirectory, "uploads");
+    private readonly string _root = GetSafeRoot(cfg["Storage:Root"]);
+
+    private static string GetSafeRoot(string? configuredRoot)
+    {
+        if (string.IsNullOrWhiteSpace(configuredRoot))
+            return Path.Combine(AppContext.BaseDirectory, "uploads");
+
+        try
+        {
+            var rootDir = Path.GetPathRoot(configuredRoot);
+            if (!string.IsNullOrEmpty(rootDir) && !Directory.Exists(rootDir))
+            {
+                return Path.Combine(AppContext.BaseDirectory, "uploads");
+            }
+            return Path.IsPathRooted(configuredRoot)
+                ? configuredRoot
+                : Path.Combine(AppContext.BaseDirectory, configuredRoot);
+        }
+        catch
+        {
+            return Path.Combine(AppContext.BaseDirectory, "uploads");
+        }
+    }
 
     public async Task<string> SaveAsync(Stream content, string extension, CancellationToken ct)
     {

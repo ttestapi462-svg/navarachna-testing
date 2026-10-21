@@ -2,11 +2,10 @@
 
 import { useMemo } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
+import { cn } from "cn"
 
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle } from "lucide-react"
 
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
@@ -53,7 +52,7 @@ function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 const fieldVariants = cva(
-  "group/field flex w-full gap-1.5",
+  "group/field flex w-full gap-3 data-[invalid=true]:text-destructive",
   {
     variants: {
       orientation: {
@@ -217,11 +216,10 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn("text-xs font-normal text-destructive flex items-center gap-1.5 pt-0.5", className)}
+      className={cn("text-sm font-normal text-destructive", className)}
       {...props}
     >
-      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-      <span>{content}</span>
+      {content}
     </div>
   )
 }

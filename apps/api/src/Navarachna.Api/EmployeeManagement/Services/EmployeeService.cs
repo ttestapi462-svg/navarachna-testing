@@ -14,7 +14,14 @@ public class EmployeeService(AppDbContext db)
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var q = db.Employees.AsNoTracking().AsQueryable();
-        if (!string.IsNullOrWhiteSpace(department)) q = q.Where(e => e.Department == department);
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            var depts = department.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (depts.Length == 1)
+                q = q.Where(e => e.Department == depts[0] || e.Designation == depts[0]);
+            else if (depts.Length > 1)
+                q = q.Where(e => depts.Contains(e.Department) || depts.Contains(e.Designation));
+        }
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.ToLower();

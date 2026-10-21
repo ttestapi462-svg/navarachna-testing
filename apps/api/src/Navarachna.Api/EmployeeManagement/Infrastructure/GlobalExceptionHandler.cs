@@ -10,6 +10,8 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log) : IExce
         if (ex is not AppException appException)
             return false; // Let Navarachna's existing handler process unrelated exceptions.
 
+        log.LogWarning(appException, "Handled employee exception for {Path}: {Message}", ctx.Request.Path, appException.Message);
+
         ctx.Response.StatusCode = appException.Status;
         await ctx.Response.WriteAsJsonAsync(new ProblemDetails
         {
