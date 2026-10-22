@@ -24,7 +24,6 @@ export interface DocumentResponse {
 
 export interface EmployeeResponse {
   id: number;
-  employeeCode: string;
   firstName: string;
   lastName: string | null;
   email: string;
@@ -32,7 +31,6 @@ export interface EmployeeResponse {
   panMasked: string | null;
   aadhaarMasked: string | null;
   department: string;
-  designation: string;
   salary: number;
   dateOfJoining: string;
   isActive: boolean;
@@ -49,7 +47,6 @@ export interface EmployeeRequest {
   panNumber?: string;
   aadhaarNumber?: string;
   department: string;
-  designation: string;
   salary: number;
   dateOfJoining: string;
   version?: number;

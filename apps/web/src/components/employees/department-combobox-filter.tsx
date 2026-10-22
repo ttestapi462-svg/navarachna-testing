@@ -13,7 +13,8 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox";
-import { Field } from "@/components/ui/field";
+import { getDesignationMeta } from "@/lib/designation-config";
+import { cn } from "@/lib/utils";
 
 interface DepartmentComboboxFilterProps {
   departments: readonly string[];
@@ -31,7 +32,7 @@ export function DepartmentComboboxFilter({
   const anchor = useComboboxAnchor();
 
   return (
-    <Field className={className}>
+    <div className={className || "w-48 sm:w-56"}>
       <Combobox
         multiple
         autoHighlight
@@ -39,18 +40,32 @@ export function DepartmentComboboxFilter({
         value={selectedDepartments}
         onValueChange={(values) => onSelectedChange(values as string[])}
       >
-        <ComboboxChips ref={anchor}>
+        <ComboboxChips
+          ref={anchor}
+          className="h-8 min-h-8 py-0 px-2 text-xs rounded-lg border-border/70 overflow-hidden bg-background"
+        >
           <ComboboxValue>
             {(values: string[]) => (
               <Fragment>
-                {values.map((value: string) => (
-                  <ComboboxChip key={value}>{value}</ComboboxChip>
-                ))}
+                {values.map((value: string) => {
+                  const meta = getDesignationMeta(value);
+                  const Icon = meta.icon;
+                  return (
+                    <ComboboxChip
+                      key={value}
+                      className="h-5 text-[10px] py-0 px-1.5 gap-1 inline-flex items-center"
+                    >
+                      <Icon className={cn("size-2.5 shrink-0", meta.iconColor)} />
+                      <span>{value}</span>
+                    </ComboboxChip>
+                  );
+                })}
                 <ComboboxChipsInput
+                  className="text-xs placeholder:text-xs"
                   placeholder={
                     values.length === 0
-                      ? "Filter role / designation..."
-                      : "Add role..."
+                      ? "Filter department..."
+                      : "Add..."
                   }
                 />
               </Fragment>
@@ -59,22 +74,34 @@ export function DepartmentComboboxFilter({
         </ComboboxChips>
         <ComboboxContent
           anchor={anchor}
-          className="rounded-xl border border-border/60 shadow-lg bg-popover/95 backdrop-blur-md min-w-56"
+          className="rounded-xl border border-border/60 shadow-lg bg-popover/95 backdrop-blur-md min-w-56 max-h-80 overflow-hidden"
         >
           <ComboboxEmpty>No items found.</ComboboxEmpty>
-          <ComboboxList className="p-1">
-            {(item: string) => (
-              <ComboboxItem
-                key={item}
-                value={item}
-                className="text-xs sm:text-sm py-1.5 px-2.5 rounded-lg cursor-pointer"
-              >
-                {item}
-              </ComboboxItem>
-            )}
+          <ComboboxList className="p-1 max-h-76 overflow-y-auto">
+            {(item: string) => {
+              const meta = getDesignationMeta(item);
+              const Icon = meta.icon;
+              return (
+                <ComboboxItem
+                  key={item}
+                  value={item}
+                  className="text-xs py-1.5 px-2 rounded-md cursor-pointer flex items-center gap-2 hover:bg-muted/60"
+                >
+                  <div
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-md shrink-0",
+                      meta.bgLight
+                    )}
+                  >
+                    <Icon className={cn("size-3", meta.iconColor)} />
+                  </div>
+                  <span className="font-medium text-foreground">{item}</span>
+                </ComboboxItem>
+              );
+            }}
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-    </Field>
+    </div>
   );
 }

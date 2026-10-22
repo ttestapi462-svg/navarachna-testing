@@ -3,40 +3,63 @@ import { z } from "zod";
 export const employeeSchema = z.object({
   firstName: z
     .string()
+    .trim()
     .min(1, "First name is required")
-    .max(100, "Max 100 characters"),
+    .min(2, "First name must be at least 2 characters")
+    .max(50, "First name cannot exceed 50 characters"),
   lastName: z
     .string()
-    .max(100, "Max 100 characters")
+    .trim()
+    .max(50, "Last name cannot exceed 50 characters")
+    .refine(
+      (val) => !val || val.length >= 2,
+      "Last name must be at least 2 characters"
+    )
     .optional()
     .or(z.literal("")),
   email: z
     .string()
-    .min(1, "Email is required")
-    .email("Enter a valid email address"),
+    .trim()
+    .min(1, "Email address is required")
+    .email("Enter a valid email address (e.g. name@example.com)"),
   mobile: z
     .string()
-    .regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number"),
+    .trim()
+    .min(1, "Mobile number is required")
+    .regex(
+      /^[6-9]\d{9}$/,
+      "Enter a valid 10-digit Indian mobile number (e.g. 9876543210)"
+    ),
   panNumber: z
     .string()
+    .trim()
     .regex(
       /^[A-Z]{5}[0-9]{4}[A-Z]$/,
-      "Invalid PAN format (e.g., ABCDE1234F)"
+      "Invalid PAN format (e.g. ABCDE1234F)"
     )
     .or(z.literal(""))
     .optional(),
   aadhaarNumber: z
     .string()
+    .trim()
     .regex(/^[2-9]\d{11}$/, "Enter a valid 12-digit Aadhaar number")
     .or(z.literal(""))
     .optional(),
   department: z.string().min(1, "Department is required"),
-  designation: z.string().min(1, "Designation is required"),
   salary: z.coerce
     .number()
     .min(0, "Salary cannot be negative")
     .max(100000000, "Salary exceeds maximum"),
-  dateOfJoining: z.string().min(1, "Date of joining is required"),
+  dateOfJoining: z
+    .string()
+    .min(1, "Date of joining is required")
+    .refine((val) => {
+      if (!val) return false;
+      const selected = new Date(val + "T00:00:00");
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      return selected <= today;
+    }, "Date of joining cannot be in the future"),
 });
 
 export type EmployeeFormData = z.infer<typeof employeeSchema>;

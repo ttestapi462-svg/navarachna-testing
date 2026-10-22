@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { EmployeeDataGrid } from "@/components/employees/employee-data-grid";
 import { EmployeeFormSheet } from "@/components/employees/employee-form-sheet";
 import { EmployeeDocumentsSheet } from "@/components/employees/employee-documents-sheet";
@@ -21,26 +21,26 @@ export default function EmployeesPage() {
   const [deletingEmployee, setDeletingEmployee] =
     useState<EmployeeResponse | null>(null);
 
-  // ─── Callbacks ─────────────────────────────────────────
-  const handleAddEmployee = () => {
+  // ─── Fast Memoized Callbacks ───────────────────────────
+  const handleAddEmployee = useCallback(() => {
     setEditingEmployee(null);
     setFormOpen(true);
-  };
+  }, []);
 
-  const handleEditEmployee = (emp: EmployeeResponse) => {
+  const handleEditEmployee = useCallback((emp: EmployeeResponse) => {
     setEditingEmployee(emp);
     setFormOpen(true);
-  };
+  }, []);
 
-  const handleViewDocuments = (emp: EmployeeResponse) => {
+  const handleViewDocuments = useCallback((emp: EmployeeResponse) => {
     setDocsEmployee(emp);
     setDocsOpen(true);
-  };
+  }, []);
 
-  const handleDeleteEmployee = (emp: EmployeeResponse) => {
+  const handleDeleteEmployee = useCallback((emp: EmployeeResponse) => {
     setDeletingEmployee(emp);
     setDeleteOpen(true);
-  };
+  }, []);
 
   return (
     <div className="w-full flex-1 flex flex-col min-h-0 h-full">

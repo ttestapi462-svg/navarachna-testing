@@ -24,26 +24,19 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SidebarUserMenu } from "./sidebar-user-menu";
 import {
   Layers,
   LayoutDashboard,
-  ShoppingBag,
   Users,
-  UsersRound,
-  Palette,
-  TrendingUp,
   ChevronRight,
-  CalendarClock,
-  Scissors,
-  Sparkles,
-  UserCheck,
-  BookUser,
-  Ruler,
-  Shirt,
-  ScrollText,
-  LineChart,
-  Target,
+  PanelLeft,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,107 +63,9 @@ const navigationStructure: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    title: "Employee Management",
-    icon: UsersRound,
-    defaultOpen: true,
-    items: [
-      {
-        title: "Employee List",
-        url: "/employees",
-        icon: UserCheck,
-      },
-    ],
-  },
-  {
-    title: "Couture Orders",
-    icon: ShoppingBag,
-    defaultOpen: true,
-    items: [
-      {
-        title: "Production Schedule",
-        url: "/#orders",
-        icon: CalendarClock,
-      },
-      {
-        title: "In Cutting",
-        icon: Scissors,
-        defaultOpen: true,
-        items: [
-          { title: "Pattern Grading", url: "/#grading" },
-          { title: "Fabric Shearing", url: "/#shearing" },
-        ],
-      },
-      {
-        title: "Hand Embroidery",
-        icon: Sparkles,
-        defaultOpen: false,
-        items: [
-          { title: "Zardozi Artisans", url: "/#zardozi" },
-          { title: "Aari Needlework", url: "/#aari" },
-        ],
-      },
-      {
-        title: "Final Fitting",
-        url: "/#fitting",
-        icon: UserCheck,
-      },
-    ],
-  },
-  {
-    title: "VIP Clients",
+    title: "Employee List",
+    url: "/employees",
     icon: Users,
-    defaultOpen: false,
-    items: [
-      {
-        title: "Client Directory",
-        url: "/#clients",
-        icon: BookUser,
-      },
-      {
-        title: "Measurements & Profiles",
-        url: "/#measurements",
-        icon: Ruler,
-      },
-    ],
-  },
-  {
-    title: "Garment Catalog",
-    icon: Palette,
-    defaultOpen: false,
-    items: [
-      {
-        title: "Couture Collections",
-        url: "/#collections",
-        icon: Shirt,
-      },
-      {
-        title: "Fabrics & Swatches",
-        icon: ScrollText,
-        defaultOpen: false,
-        items: [
-          { title: "Raw Silk & Brocade", url: "/#silk" },
-          { title: "Chanderi & Organza", url: "/#chanderi" },
-          { title: "Velvet & Tulle", url: "/#velvet" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Revenue & Analytics",
-    icon: TrendingUp,
-    defaultOpen: false,
-    items: [
-      {
-        title: "Monthly Trajectory",
-        url: "/#revenue",
-        icon: LineChart,
-      },
-      {
-        title: "Production Targets",
-        url: "/#targets",
-        icon: Target,
-      },
-    ],
   },
 ];
 
@@ -397,39 +292,79 @@ function SidebarNavGroup({
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar font-sans select-none">
-      {/* 1. Header: Refined Atelier Crest & Title + Desktop Shrink Trigger */}
+      {/* 1. Header: Refined Atelier Crest & Title + Desktop Shrink / Expand Trigger */}
       <SidebarHeader className="h-14 border-b border-sidebar-border/60 px-3 flex flex-row items-center justify-between group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
-        {/* Full Brand Crest (Expanded Mode) */}
+        {/* Full Brand Crest & Title (Expanded Mode) */}
         <Link
           href="/"
-          className="flex items-center gap-2.5 group-data-[collapsible=icon]:hidden hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2.5 group-data-[collapsible=icon]:hidden hover:opacity-90 transition-opacity min-w-0"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs shrink-0">
             <Layers className="size-4" />
           </div>
-          <div className="grid flex-1 text-left leading-none">
-            <span className="font-semibold text-foreground text-xs tracking-tight">
+          <div className="grid flex-1 text-left leading-none truncate">
+            <span className="font-semibold text-foreground text-xs tracking-tight truncate">
               Navarachna
             </span>
-            <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
+            <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5 truncate">
               Designer Studio
             </span>
           </div>
         </Link>
 
-        {/* Centered Crest Icon (Shrink / Collapsed Mode) */}
-        <Link
-          href="/"
-          className="hidden group-data-[collapsible=icon]:flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs mx-auto hover:opacity-90 transition-opacity"
-          title="Navarachna Designer Studio"
-        >
-          <Layers className="size-4" />
-        </Link>
+        {/* Sidebar Close Button on the Right Side of Menu Header (Expanded Mode) */}
+        <div className="group-data-[collapsible=icon]:hidden">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-8 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
+                onClick={toggleSidebar}
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeft className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p className="text-xs">Collapse sidebar</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Morphing Crest / Toggle Icon (Collapsed Mode):
+            Default: displays the Atelier crest avatar (Layers inside primary crimson).
+            On hover: replaces with the INDEPENDENT toggle button (PanelLeft on clean ghost/muted background, not inside the avatar). */}
+        <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="group/toggle relative flex size-8 items-center justify-center rounded-lg cursor-pointer transition-all active:scale-95 select-none"
+                aria-label="Expand sidebar"
+              >
+                {/* 1. Default: Atelier Crest Avatar (Crimson background + Layers) */}
+                <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs transition-all duration-150 group-hover/toggle:opacity-0 group-hover/toggle:scale-75 absolute">
+                  <Layers className="size-4" />
+                </div>
+
+                {/* 2. Hover: Independent Toggle Button (No red avatar! Clean ghost/muted button + PanelLeft) */}
+                <div className="size-8 rounded-lg bg-muted text-foreground border border-border/70 flex items-center justify-center shadow-2xs transition-all duration-150 opacity-0 scale-75 group-hover/toggle:opacity-100 group-hover/toggle:scale-100">
+                  <PanelLeft className="size-4" />
+                </div>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p className="text-xs">Expand sidebar</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </SidebarHeader>
 
       {/* 2. Main Navigation with Parent & Collapsible Child Menus */}
@@ -439,7 +374,11 @@ export function AppSidebar() {
             <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
               {navigationStructure.map((item) => {
                 const isDirectLink = !item.items || item.items.length === 0;
-                const isDirectActive = isDirectLink && pathname === item.url;
+                const isDirectActive =
+                  isDirectLink &&
+                  (item.url === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(item.url || ""));
                 const Icon = item.icon;
 
                 // Case A: Direct Single-Level Item (e.g. Dashboard)

@@ -18,7 +18,6 @@ public class EmployeeRequest
     public string? AadhaarNumber { get; set; }          // only last 4 digits are stored
 
     [Required] public string Department { get; set; } = default!;
-    [Required] public string Designation { get; set; } = default!;
     [Range(0, 100000000)] public decimal Salary { get; set; }
     public DateOnly DateOfJoining { get; set; }
 
@@ -28,9 +27,9 @@ public class EmployeeRequest
 public record DocumentResponse(int Id, DocumentType DocumentType, string FileName,
     string ContentType, long SizeBytes, DateTime UploadedAt);
 
-public record EmployeeResponse(int Id, string EmployeeCode, string FirstName, string? LastName,
+public record EmployeeResponse(int Id, string FirstName, string? LastName,
     string Email, string Mobile, string? PanMasked, string? AadhaarMasked, string Department,
-    string Designation, decimal Salary, DateOnly DateOfJoining, bool IsActive,
+    decimal Salary, DateOnly DateOfJoining, bool IsActive,
     DateTime CreatedAt, uint Version, List<DocumentResponse> Documents);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)

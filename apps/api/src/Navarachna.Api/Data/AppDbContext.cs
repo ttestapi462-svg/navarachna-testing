@@ -109,13 +109,10 @@ public class AppDbContext : DbContext
         });
 
         // Employee Management entities integrated into the original authentication DbContext.
-        modelBuilder.HasSequence<int>("employee_code_seq").StartsAt(1).IncrementsBy(1);
-
         modelBuilder.Entity<Employee>(entity =>
         {
             entity.ToTable("Employees");
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.EmployeeCode).IsUnique();
             entity.HasIndex(e => e.Email).IsUnique();
             entity.Property(e => e.Salary).HasPrecision(12, 2);
             entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid")

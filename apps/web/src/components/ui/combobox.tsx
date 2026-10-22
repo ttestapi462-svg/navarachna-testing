@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
-import { cn } from "cn"
+import { useFocusScopeBranch } from "@radix-ui/react-focus-scope"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -86,19 +87,116 @@ function ComboboxInput({
   )
 }
 
-function ComboboxContent({
-  className,
-  side = "bottom",
-  sideOffset = 6,
-  align = "start",
-  alignOffset = 0,
-  anchor,
-  ...props
-}: ComboboxPrimitive.Popup.Props &
-  Pick<
-    ComboboxPrimitive.Positioner.Props,
-    "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
-  >) {
+const ComboboxContent = React.forwardRef<
+  HTMLDivElement,
+  ComboboxPrimitive.Popup.Props &
+    Pick<
+      ComboboxPrimitive.Positioner.Props,
+      "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
+    >
+>(function ComboboxContent(
+  {
+    className,
+    side = "bottom",
+    sideOffset = 6,
+    align = "start",
+    alignOffset = 0,
+    anchor,
+    ...props
+  },
+  forwardedRef
+) {
+  const [popupNode, setPopupNode] = React.useState<HTMLDivElement | null>(null);
+
+  // Register popup element with Radix FocusScope / Dialog so react-remove-scroll treats it as an allowed shard
+  useFocusScopeBranch(popupNode);
+
+  React.useEffect(() => {
+    if (!popupNode) return;
+
+    // Capture-phase wheel listener on the popup container:
+    // 1. Catches wheel events anywhere within the popup (items, list, padding, search input).
+    // 2. Normalizes deltaMode (lines on Windows standard mouse wheel vs pixels on trackpads).
+    // 3. Directly scrolls the list via `scrollTop += delta`, completely bypassing any browser or modal scroll locks.
+    // 4. Calls stopPropagation() and preventDefault() to prevent outer modal / document scroll interference.
+    const handleWheel = (e: WheelEvent) => {
+      const list = popupNode.querySelector('[data-slot="combobox-list"]') as HTMLElement | null;
+      if (!list) return;
+
+      // Always stop propagation so document-level react-remove-scroll never sees this event
+      e.stopPropagation();
+
+      if (list.scrollHeight <= list.clientHeight) return;
+
+      // Normalize delta based on deltaMode:
+      // 0 = DOM_DELTA_PIXEL (trackpad / precision wheel)
+      // 1 = DOM_DELTA_LINE (Windows standard mouse wheel: 3 lines per notch)
+      // 2 = DOM_DELTA_PAGE
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) {
+        delta *= 28; // ~28px per item height
+      } else if (e.deltaMode === 2) {
+        delta *= list.clientHeight;
+      }
+
+      const canScrollDown = delta > 0 && list.scrollTop + list.clientHeight < list.scrollHeight - 0.5;
+      const canScrollUp = delta < 0 && list.scrollTop > 0.5;
+
+      if (canScrollDown || canScrollUp) {
+        e.preventDefault();
+        list.scrollTop += delta;
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const list = popupNode.querySelector('[data-slot="combobox-list"]') as HTMLElement | null;
+      if (!list) return;
+
+      const currentY = e.touches[0].clientY;
+      const delta = touchStartY - currentY;
+      touchStartY = currentY;
+
+      const canScrollDown = delta > 0 && list.scrollTop + list.clientHeight < list.scrollHeight - 0.5;
+      const canScrollUp = delta < 0 && list.scrollTop > 0.5;
+
+      if (canScrollDown || canScrollUp) {
+        e.stopPropagation();
+        e.preventDefault();
+        list.scrollTop += delta;
+      }
+    };
+
+    popupNode.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    popupNode.addEventListener("touchstart", handleTouchStart, { passive: true, capture: true });
+    popupNode.addEventListener("touchmove", handleTouchMove, { passive: false, capture: true });
+
+    return () => {
+      popupNode.removeEventListener("wheel", handleWheel, { capture: true });
+      popupNode.removeEventListener("touchstart", handleTouchStart, { capture: true });
+      popupNode.removeEventListener("touchmove", handleTouchMove, { capture: true });
+    };
+  }, [popupNode]);
+
+  const handleRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setPopupNode(node);
+      if (typeof forwardedRef === "function") {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+    },
+    [forwardedRef]
+  );
+
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
@@ -110,28 +208,68 @@ function ComboboxContent({
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup
+          ref={handleRef}
           data-slot="combobox-content"
           data-chips={!!anchor}
-          className={cn("group/combobox-content max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1.5 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-input/30 *:data-[slot=input-group]:bg-input/50 *:data-[slot=input-group]:shadow-none dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 animate-none! relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground!", className )}
+          className={cn(
+            "group/combobox-content flex flex-col max-h-80 w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+1.75rem)] origin-(--transform-origin) overflow-hidden rounded-2xl text-popover-foreground shadow-xl ring-1 ring-foreground/10 duration-100 bg-popover relative",
+            className
+          )}
           {...props}
         />
       </ComboboxPrimitive.Positioner>
     </ComboboxPrimitive.Portal>
-  )
-}
+  );
+});
 
-function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
+const ComboboxList = React.forwardRef<
+  HTMLDivElement,
+  ComboboxPrimitive.List.Props
+>(function ComboboxList({ className, onWheel, ...props }, forwardedRef) {
+  const internalRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      internalRef.current = node;
+      if (typeof forwardedRef === "function") {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+    },
+    [forwardedRef]
+  );
+
   return (
     <ComboboxPrimitive.List
+      ref={handleRef}
       data-slot="combobox-list"
+      onWheel={(e) => {
+        const el = internalRef.current;
+        if (el && el.scrollHeight > el.clientHeight) {
+          e.stopPropagation();
+          let delta = e.deltaY;
+          if (e.deltaMode === 1) delta *= 28;
+          else if (e.deltaMode === 2) delta *= el.clientHeight;
+
+          const canScrollDown = delta > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 0.5;
+          const canScrollUp = delta < 0 && el.scrollTop > 0.5;
+
+          if (canScrollDown || canScrollUp) {
+            e.preventDefault();
+            el.scrollTop += delta;
+          }
+        }
+        onWheel?.(e);
+      }}
       className={cn(
-        "no-scrollbar max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))] scroll-py-1.5 overflow-y-auto overscroll-contain p-1.5 data-empty:p-0",
+        "flex-1 min-h-0 overflow-y-auto overscroll-contain p-1.5 scroll-py-1 data-empty:p-0 [scrollbar-width:thin] [scrollbar-color:var(--scrollbar-thumb)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-thumb]:rounded-full",
         className
       )}
       {...props}
     />
-  )
-}
+  );
+});
 
 function ComboboxItem({
   className,

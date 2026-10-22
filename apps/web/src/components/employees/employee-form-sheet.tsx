@@ -1,69 +1,118 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { format, isAfter, startOfDay } from "date-fns";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import {
-  FieldSet,
-  FieldGroup,
   Field,
   FieldLabel,
   FieldError,
   FieldDescription,
-  FieldSeparator,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
+  InputGroupButton,
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "@/components/ui/combobox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent } from "@/components/ui/card";
+
+const ASHOKA_CHAKRA_SPOKES = Array.from({ length: 24 }).map((_, i) => (
+  <line
+    key={i}
+    x1="0"
+    y1="0"
+    x2="0"
+    y2="20"
+    stroke="#000080"
+    strokeWidth="0.9"
+    transform={`rotate(${i * 15})`}
+  />
+));
+
+function IndiaFlag({ className, title = "India" }: { className?: string; title?: string }) {
+  return (
+    <svg viewBox="0 0 640 480" className={cn("w-5 h-3.5 rounded-2xs object-cover shrink-0", className)} aria-hidden="true">
+      {title && <title>{title}</title>}
+      <path fill="#FF9933" d="M0 0h640v160H0z" />
+      <path fill="#FFFFFF" d="M0 160h640v160H0z" />
+      <path fill="#128807" d="M0 320h640v160H0z" />
+      <g transform="matrix(3.2 0 0 3.2 320 240)">
+        <circle r="20" fill="none" stroke="#000080" strokeWidth="2" />
+        <circle r="3.5" fill="#000080" />
+        {ASHOKA_CHAKRA_SPOKES}
+      </g>
+    </svg>
+  );
+}
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   employeeSchema,
   type EmployeeFormData,
   DEPARTMENTS,
-  DESIGNATIONS,
 } from "@/lib/validations/employee";
+import { getDesignationMeta } from "@/lib/designation-config";
 import {
   useCreateEmployee,
   useUpdateEmployee,
 } from "@/services/employee-service";
 import type { EmployeeResponse, EmployeeRequest } from "@/types/employee";
+import { cn } from "@/lib/utils";
 import {
   UserPlus,
+  UserRoundPlus,
+  UserRoundPen,
   Edit3,
   Loader2,
-  AlertCircle,
   ShieldAlert,
   User,
   Mail,
-  Phone,
-  Building2,
   Briefcase,
-  Calendar,
+  Building2,
+  CalendarIcon,
   CreditCard,
   Fingerprint,
+  InfoIcon,
+  X,
+  Check,
+  ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 
-interface EmployeeFormSheetProps {
+interface EmployeeFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employee?: EmployeeResponse | null;
@@ -73,7 +122,26 @@ export function EmployeeFormSheet({
   open,
   onOpenChange,
   employee,
-}: EmployeeFormSheetProps) {
+}: EmployeeFormDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <EmployeeFormDialogContent
+          employee={employee}
+          onOpenChange={onOpenChange}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function EmployeeFormDialogContent({
+  employee,
+  onOpenChange,
+}: {
+  employee?: EmployeeResponse | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const isEdit = Boolean(employee);
   const [conflictError, setConflictError] = useState<string | null>(null);
 
@@ -84,69 +152,48 @@ export function EmployeeFormSheet({
     register,
     handleSubmit,
     control,
-    reset,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      mobile: "",
-      panNumber: "",
-      aadhaarNumber: "",
-      department: "Master Tailor",
-      designation: "Master Tailor",
-      salary: 0,
-      dateOfJoining: new Date().toISOString().split("T")[0],
-    },
+    mode: "onTouched",
+    defaultValues: isEdit && employee
+      ? {
+          firstName: employee.firstName,
+          lastName: employee.lastName || "",
+          email: employee.email,
+          mobile: employee.mobile,
+          panNumber: "",
+          aadhaarNumber: "",
+          department: employee.department || "Master Tailor",
+          salary: employee.salary,
+          dateOfJoining: employee.dateOfJoining,
+        }
+      : {
+          firstName: "",
+          lastName: "",
+          email: "",
+          mobile: "",
+          panNumber: "",
+          aadhaarNumber: "",
+          department: "Master Tailor",
+          salary: 35000,
+          dateOfJoining: new Date().toISOString().split("T")[0],
+        },
   });
-
-  useEffect(() => {
-    setConflictError(null);
-    if (employee && open) {
-      reset({
-        firstName: employee.firstName,
-        lastName: employee.lastName || "",
-        email: employee.email,
-        mobile: employee.mobile,
-        panNumber: "", // backend returns masked; leave blank unless updating
-        aadhaarNumber: "", // backend returns masked; leave blank unless updating
-        department: employee.department,
-        designation: employee.designation,
-        salary: employee.salary,
-        dateOfJoining: employee.dateOfJoining,
-      });
-    } else if (!employee && open) {
-      reset({
-        firstName: "",
-        lastName: "",
-        email: "",
-        mobile: "",
-        panNumber: "",
-        aadhaarNumber: "",
-        department: "Master Tailor",
-        designation: "Master Tailor",
-        salary: 35000,
-        dateOfJoining: new Date().toISOString().split("T")[0],
-      });
-    }
-  }, [employee, open, reset]);
 
   const onSubmit = async (data: EmployeeFormData) => {
     setConflictError(null);
     try {
       if (isEdit && employee) {
         const payload: EmployeeRequest = {
-          firstName: data.firstName,
-          lastName: data.lastName || undefined,
-          email: data.email,
-          mobile: data.mobile,
-          panNumber: data.panNumber ? data.panNumber.toUpperCase() : undefined,
-          aadhaarNumber: data.aadhaarNumber || undefined,
+          firstName: data.firstName.trim(),
+          lastName: data.lastName?.trim() || undefined,
+          email: data.email.trim(),
+          mobile: data.mobile.trim(),
+          panNumber: data.panNumber ? data.panNumber.toUpperCase().trim() : undefined,
+          aadhaarNumber: data.aadhaarNumber ? data.aadhaarNumber.trim() : undefined,
           department: data.department,
-          designation: data.designation,
           salary: Number(data.salary),
           dateOfJoining: data.dateOfJoining,
           version: employee.version,
@@ -154,14 +201,13 @@ export function EmployeeFormSheet({
         await updateMutation.mutateAsync({ id: employee.id, data: payload });
       } else {
         const payload: EmployeeRequest = {
-          firstName: data.firstName,
-          lastName: data.lastName || undefined,
-          email: data.email,
-          mobile: data.mobile,
-          panNumber: data.panNumber ? data.panNumber.toUpperCase() : undefined,
-          aadhaarNumber: data.aadhaarNumber || undefined,
+          firstName: data.firstName.trim(),
+          lastName: data.lastName?.trim() || undefined,
+          email: data.email.trim(),
+          mobile: data.mobile.trim(),
+          panNumber: data.panNumber ? data.panNumber.toUpperCase().trim() : undefined,
+          aadhaarNumber: data.aadhaarNumber ? data.aadhaarNumber.trim() : undefined,
           department: data.department,
-          designation: data.designation,
           salary: Number(data.salary),
           dateOfJoining: data.dateOfJoining,
         };
@@ -179,351 +225,664 @@ export function EmployeeFormSheet({
     isSubmitting || createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="sm:max-w-2xl w-full flex flex-col p-0 gap-0"
-      >
-        {/* Sticky Header */}
-        <SheetHeader className="px-6 py-4 border-b border-border/60 bg-muted/20">
-          <div className="flex items-center gap-2">
-            {isEdit ? (
-              <Edit3 className="size-4 text-primary" />
-            ) : (
-              <UserPlus className="size-4 text-primary" />
-            )}
-            <SheetTitle className="text-base font-semibold text-foreground">
-              {isEdit ? "Edit Employee Profile" : "Register New Employee"}
-            </SheetTitle>
-          </div>
-          <SheetDescription className="text-xs text-muted-foreground mt-0.5">
-            {isEdit ? (
-              <span>
-                Updating profile for{" "}
-                <span className="font-mono text-primary font-medium">
-                  {employee?.employeeCode}
-                </span>
-                . Changes maintain full audit history.
-              </span>
-            ) : (
-              "Enter employee and atelier employment details below."
-            )}
-          </SheetDescription>
-        </SheetHeader>
-
-        {/* Scrollable Form Body using ReUI Field system */}
-        <form
-          id="employee-form"
-          onSubmit={handleSubmit(onSubmit)}
-          className="flex-1 overflow-y-auto px-6 py-5 space-y-5"
-        >
-          {conflictError && (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 flex items-start gap-2.5 text-xs text-destructive">
-              <ShieldAlert className="size-4 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold">Conflict Detected</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed">
-                  {conflictError}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Section 1: Personal Details */}
-          <FieldSet className="space-y-3">
-            <div className="text-xs font-semibold text-foreground/90 uppercase tracking-wider">
-              Personal Information
-            </div>
-            <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  First Name <span className="text-destructive">*</span>
-                </FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <User className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    {...register("firstName")}
-                    placeholder="e.g. Rajesh"
-                    className="text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.firstName && (
-                  <FieldError errors={[errors.firstName]} />
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel className="text-xs font-medium">Last Name</FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <User className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    {...register("lastName")}
-                    placeholder="e.g. Verma"
-                    className="text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.lastName && <FieldError errors={[errors.lastName]} />}
-              </Field>
-            </FieldGroup>
-
-            <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  Email Address <span className="text-destructive">*</span>
-                </FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Mail className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    type="email"
-                    {...register("email")}
-                    placeholder="rajesh@navarachna.com"
-                    className="text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.email && <FieldError errors={[errors.email]} />}
-              </Field>
-
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  Mobile Number <span className="text-destructive">*</span>
-                </FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Phone className="size-3.5 text-muted-foreground" />
-                    <InputGroupText className="font-mono text-xs font-semibold text-foreground/80 border-r border-border/70 pr-2">
-                      +91
-                    </InputGroupText>
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    type="tel"
-                    maxLength={10}
-                    {...register("mobile")}
-                    placeholder="9876543210"
-                    className="font-mono text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.mobile && <FieldError errors={[errors.mobile]} />}
-              </Field>
-            </FieldGroup>
-          </FieldSet>
-
-          <FieldSeparator className="my-1" />
-
-          {/* Section 2: Role & Employment */}
-          <FieldSet className="space-y-3">
-            <div className="text-xs font-semibold text-foreground/90 uppercase tracking-wider">
-              Role & Employment
-            </div>
-            <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  Role / Designation <span className="text-destructive">*</span>
-                </FieldLabel>
-                <Controller
-                  name="designation"
-                  control={control}
-                  render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={(val) => {
-                        field.onChange(val);
-                        setValue("department", val);
-                      }}
-                      disabled={isPending}
-                    >
-                      <SelectTrigger className="w-full text-xs">
-                        <div className="flex items-center gap-2">
-                          <Briefcase className="size-3.5 text-muted-foreground" />
-                          <SelectValue placeholder="Select role / designation" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {DESIGNATIONS.map((desig) => (
-                            <SelectItem
-                              key={desig}
-                              value={desig}
-                              className="cursor-pointer py-1.5 text-xs"
-                            >
-                              {desig}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.designation && (
-                  <FieldError errors={[errors.designation]} />
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  Monthly Compensation (₹) <span className="text-destructive">*</span>
-                </FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <InputGroupText className="font-semibold text-foreground text-xs">
-                      ₹
-                    </InputGroupText>
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    type="number"
-                    step="500"
-                    {...register("salary")}
-                    placeholder="35000"
-                    className="font-mono text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.salary && <FieldError errors={[errors.salary]} />}
-              </Field>
-            </FieldGroup>
-
-            <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Field>
-                <FieldLabel className="text-xs font-medium">
-                  Date of Joining <span className="text-destructive">*</span>
-                </FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Calendar className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    type="date"
-                    {...register("dateOfJoining")}
-                    className="text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.dateOfJoining && (
-                  <FieldError errors={[errors.dateOfJoining]} />
-                )}
-              </Field>
-            </FieldGroup>
-          </FieldSet>
-
-          <FieldSeparator className="my-1" />
-
-          {/* Section 3: Compliance & Identification */}
-          <FieldSet className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-foreground/90 uppercase tracking-wider">
-                Identity & Tax (Optional)
-              </div>
-              {isEdit && (
-                <span className="text-[11px] text-muted-foreground">
-                  Leave blank to retain current
-                </span>
+    <DialogContent
+      showCloseButton={false}
+      className="flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] sm:max-w-xl md:max-w-2xl flex-col overflow-hidden p-0 gap-0 rounded-2xl border border-border/80 shadow-2xl bg-card animate-in fade-in-0 zoom-in-98 duration-100"
+    >
+        {/* Sticky Header with Light Pink Atelier Brand Identity */}
+        <DialogHeader className="bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40 sticky top-0 z-10 border-b border-rose-200/70 dark:border-rose-900/40 px-5 py-3 sm:py-3.5 text-left flex flex-row items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-rose-200/90 dark:border-rose-900/60 shadow-xs shrink-0">
+              {isEdit ? (
+                <UserRoundPen className="size-4 stroke-[1.8]" />
+              ) : (
+                <UserRoundPlus className="size-4 stroke-[1.8]" />
               )}
             </div>
+            <div>
+              <DialogTitle className="text-sm font-semibold text-foreground tracking-tight">
+                {isEdit ? "Edit Employee Profile" : "Register New Employee"}
+              </DialogTitle>
+              <DialogDescription className="text-[11px] text-muted-foreground mt-0.5">
+                {isEdit ? (
+                  <span>
+                    Updating profile for{" "}
+                    <span className="font-semibold text-primary underline decoration-primary/40 underline-offset-2">
+                      {employee?.firstName} {employee?.lastName || ""}
+                    </span>
+                    .
+                  </span>
+                ) : (
+                  "Fill in employee details to create a staff record and profile."
+                )}
+              </DialogDescription>
+            </div>
+          </div>
 
-            <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <Field>
-                <FieldLabel className="text-xs font-medium">PAN Number</FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <CreditCard className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    maxLength={10}
-                    {...register("panNumber")}
-                    placeholder={
-                      isEdit && employee?.panMasked
-                        ? employee.panMasked
-                        : "ABCDE1234F"
-                    }
-                    onChange={(e) =>
-                      setValue("panNumber", e.target.value.toUpperCase())
-                    }
-                    className="font-mono uppercase text-xs"
-                    disabled={isPending}
-                  />
-                </InputGroup>
-                {errors.panNumber && (
-                  <FieldError errors={[errors.panNumber]} />
-                )}
-                {isEdit && employee?.panMasked && (
-                  <FieldDescription className="text-[11px]">
-                    Current: {employee.panMasked}
-                  </FieldDescription>
-                )}
-              </Field>
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="size-7.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-rose-100/70 dark:hover:bg-rose-900/40 active:bg-rose-200/50 cursor-pointer shrink-0 transition-colors"
+            >
+              <X className="size-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DialogClose>
+        </DialogHeader>
 
-              <Field>
-                <FieldLabel className="text-xs font-medium">12-Digit Aadhaar</FieldLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Fingerprint className="size-3.5 text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    maxLength={12}
-                    {...register("aadhaarNumber")}
-                    placeholder={
-                      isEdit && employee?.aadhaarMasked
-                        ? employee.aadhaarMasked
-                        : "234567890123"
-                    }
-                    className="font-mono text-xs"
-                    disabled={isPending}
+        {/* Scrollable Form Body with Clean WebKit & Firefox Scrollbars */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3.5 sm:py-4 [scrollbar-width:thin] [scrollbar-color:var(--scrollbar-thumb)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border/70 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+          <form
+            id="employee-form"
+            noValidate
+            onSubmit={handleSubmit(onSubmit)}
+            className="space-y-3"
+          >
+            {conflictError && (
+              <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 flex items-start gap-2.5 text-xs text-destructive">
+                <ShieldAlert className="size-4 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold">Conflict Detected</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed">
+                    {conflictError}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── CARD 1: Personal Information ──────────────────────────── */}
+            <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center gap-1.5 pb-1 border-b border-border/40">
+                <User className="size-3.5 text-primary shrink-0" />
+                <h3 className="text-xs font-semibold text-foreground tracking-tight">
+                  Personal Information
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* First Name: 2-50 characters */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.firstName ? "text-destructive" : "text-foreground/85")}>
+                    First Name <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.firstName}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.firstName
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupInput
+                      maxLength={50}
+                      {...register("firstName")}
+                      placeholder="Rajesh"
+                      className="text-xs placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.firstName}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <User className={cn("size-3.5", errors.firstName ? "text-destructive" : "text-muted-foreground/70")} />
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.firstName && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.firstName.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+
+                {/* Last Name: 2-50 characters */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.lastName ? "text-destructive" : "text-foreground/85")}>
+                    Last Name
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.lastName}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.lastName
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupInput
+                      maxLength={50}
+                      {...register("lastName")}
+                      placeholder="Verma"
+                      className="text-xs placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.lastName}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <User className={cn("size-3.5", errors.lastName ? "text-destructive" : "text-muted-foreground/70")} />
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.lastName && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.lastName.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+
+                {/* Email Address */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.email ? "text-destructive" : "text-foreground/85")}>
+                    Email Address <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.email}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.email
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupInput
+                      type="email"
+                      {...register("email")}
+                      placeholder="name@navarachna.com"
+                      className="text-xs placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.email}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <Mail className={cn("size-3.5", errors.email ? "text-destructive" : "text-muted-foreground/70")} />
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.email && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.email.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+
+                {/* Mobile Number: Exactly 10 digits with Indian Flag only, no +91 text */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.mobile ? "text-destructive" : "text-foreground/85")}>
+                    Mobile Number <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.mobile}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.mobile
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupAddon className="bg-muted/30 px-2.5 border-r border-border/70 select-none">
+                      <span className="w-5 h-3.5 overflow-hidden rounded-xs shrink-0 flex items-center justify-center border border-border/40 shadow-2xs">
+                        <IndiaFlag title="India" />
+                      </span>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      type="tel"
+                      maxLength={10}
+                      inputMode="numeric"
+                      {...register("mobile", {
+                        onChange: (e) => {
+                          // Restrict strictly to digits only, max 10 characters
+                          e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        },
+                      })}
+                      placeholder="98765 43210"
+                      className="text-xs placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.mobile}
+                    />
+                  </InputGroup>
+                  {errors.mobile && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.mobile.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+              </div>
+            </div>
+
+            {/* ── CARD 2: Atelier Employment ─────────────────────────── */}
+            <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center gap-1.5 pb-1 border-b border-border/40">
+                <Briefcase className="size-3.5 text-primary shrink-0" />
+                <h3 className="text-xs font-semibold text-foreground tracking-tight">
+                  Atelier Employment
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Department */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.department ? "text-destructive" : "text-foreground/85")}>
+                    Department <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <Controller
+                    name="department"
+                    control={control}
+                    render={({ field }) => {
+                      return (
+                        <Combobox
+                          items={[...DEPARTMENTS]}
+                          value={field.value}
+                          onValueChange={(val) => field.onChange(val as string)}
+                          itemToStringValue={(item: string) => item}
+                        >
+                          <ComboboxTrigger
+                            render={
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "h-8 w-full justify-between font-normal text-xs bg-background border-border/80 px-2.5",
+                                  errors.department && "border-destructive ring-2 ring-destructive/20"
+                                )}
+                                disabled={isPending}
+                                type="button"
+                              />
+                            }
+                          >
+                            <ComboboxValue placeholder="Select department">
+                              {(val: string) => {
+                                if (!val) {
+                                  return (
+                                    <span className="text-muted-foreground/60 text-xs">
+                                      Select department
+                                    </span>
+                                  );
+                                }
+                                const meta = getDesignationMeta(val);
+                                const Icon = meta.icon;
+                                return (
+                                  <span className="flex items-center gap-2 truncate text-left">
+                                    <Icon className={cn("size-3.5 shrink-0", meta.iconColor)} />
+                                    <span className="truncate text-foreground font-medium text-xs">
+                                      {val}
+                                    </span>
+                                  </span>
+                                );
+                              }}
+                            </ComboboxValue>
+                          </ComboboxTrigger>
+                          <ComboboxContent className="w-(--anchor-width) min-w-[240px] max-w-xs rounded-xl border border-border/70 shadow-xl bg-popover p-1.5 overflow-hidden flex flex-col">
+                            <ComboboxInput
+                              showTrigger={false}
+                              placeholder="Search department..."
+                              className="h-8 text-xs mb-1 shrink-0"
+                            />
+                            <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground">
+                              No departments found.
+                            </ComboboxEmpty>
+                            <ComboboxList className="max-h-52 overflow-y-auto overscroll-contain pr-1">
+                              {(item: string) => {
+                                const meta = getDesignationMeta(item);
+                                const Icon = meta.icon;
+                                return (
+                                  <ComboboxItem
+                                    key={item}
+                                    value={item}
+                                    className="text-xs py-1.5 px-2 rounded-md cursor-pointer flex items-center gap-2 hover:bg-muted/70 transition-colors"
+                                  >
+                                    <div
+                                      className={cn(
+                                        "flex size-5 items-center justify-center rounded-md shrink-0 shadow-2xs",
+                                        meta.bgLight
+                                      )}
+                                    >
+                                      <Icon className={cn("size-3", meta.iconColor)} />
+                                    </div>
+                                    <span className="font-medium text-foreground">{item}</span>
+                                  </ComboboxItem>
+                                );
+                              }}
+                            </ComboboxList>
+                          </ComboboxContent>
+                        </Combobox>
+                      );
+                    }}
                   />
-                </InputGroup>
-                {errors.aadhaarNumber && (
-                  <FieldError errors={[errors.aadhaarNumber]} />
+                  {errors.department && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.department.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+
+                {/* Monthly Compensation */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.salary ? "text-destructive" : "text-foreground/85")}>
+                    Monthly Compensation <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.salary}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.salary
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupAddon>
+                      <InputGroupText className={cn("font-semibold text-xs", errors.salary ? "text-destructive" : "text-foreground")}>
+                        ₹
+                      </InputGroupText>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      type="number"
+                      step="500"
+                      min="0"
+                      {...register("salary")}
+                      placeholder="35000"
+                      className="font-mono text-xs h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.salary}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupText className="text-[10px] text-muted-foreground font-medium uppercase">
+                        INR / mo
+                      </InputGroupText>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.salary && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.salary.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+
+                {/* Date of Joining: NO FUTURE DATES */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.dateOfJoining ? "text-destructive" : "text-foreground/85")}>
+                    Date of Joining <span className="text-destructive font-bold">*</span>
+                  </FieldLabel>
+                  <Controller
+                    name="dateOfJoining"
+                    control={control}
+                    render={({ field }) => (
+                      <DatePickerField
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={isPending}
+                        hasError={!!errors.dateOfJoining}
+                      />
+                    )}
+                  />
+                  {errors.dateOfJoining && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.dateOfJoining.message}</span>
+                    </FieldError>
+                  )}
+                </Field>
+              </div>
+            </div>
+
+            {/* ── CARD 3: Identity & Statutory Compliance ───────────────── */}
+            <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5 text-primary shrink-0" />
+                  <h3 className="text-xs font-semibold text-foreground tracking-tight">
+                    Identity & Statutory <span className="text-[11px] font-normal text-muted-foreground">(Optional)</span>
+                  </h3>
+                </div>
+                {isEdit && (
+                  <span className="text-[10px] text-muted-foreground font-medium">
+                    Leave blank to keep existing
+                  </span>
                 )}
-                {isEdit && employee?.aadhaarMasked && (
-                  <FieldDescription className="text-[11px]">
-                    Current: {employee.aadhaarMasked}
-                  </FieldDescription>
-                )}
-              </Field>
-            </FieldGroup>
-          </FieldSet>
-        </form>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* PAN Number */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.panNumber ? "text-destructive" : "text-foreground/85")}>
+                    PAN Number
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.panNumber}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.panNumber
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupAddon>
+                      <CreditCard className={cn("size-3.5", errors.panNumber ? "text-destructive" : "text-muted-foreground/70")} />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      maxLength={10}
+                      {...register("panNumber")}
+                      placeholder={
+                        isEdit && employee?.panMasked
+                          ? employee.panMasked
+                          : "ABCDE1234F"
+                      }
+                      onChange={(e) =>
+                        setValue("panNumber", e.target.value.toUpperCase())
+                      }
+                      className="font-mono uppercase text-xs placeholder:normal-case placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.panNumber}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <InputGroupButton
+                              variant="ghost"
+                              size="icon-xs"
+                              tabIndex={-1}
+                              className="size-5 rounded-md hover:bg-muted/60"
+                            >
+                              <InfoIcon className="size-3.5 text-muted-foreground/70" />
+                            </InputGroupButton>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Permanent Account Number (10 alphanumeric chars: ABCDE1234F)
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.panNumber && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.panNumber.message}</span>
+                    </FieldError>
+                  )}
+                  {isEdit && employee?.panMasked && (
+                    <FieldDescription className="text-[10px] text-muted-foreground mt-0.5">
+                      Current stored: {employee.panMasked}
+                    </FieldDescription>
+                  )}
+                </Field>
+
+                {/* 12-Digit Aadhaar */}
+                <Field className="gap-1">
+                  <FieldLabel className={cn("text-[11px] font-medium", errors.aadhaarNumber ? "text-destructive" : "text-foreground/85")}>
+                    12-Digit Aadhaar
+                  </FieldLabel>
+                  <InputGroup
+                    aria-invalid={!!errors.aadhaarNumber}
+                    className={cn(
+                      "h-8 transition-all",
+                      errors.aadhaarNumber
+                        ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                        : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                    )}
+                  >
+                    <InputGroupAddon>
+                      <Fingerprint className={cn("size-3.5", errors.aadhaarNumber ? "text-destructive" : "text-muted-foreground/70")} />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      maxLength={12}
+                      {...register("aadhaarNumber", {
+                        onChange: (e) => {
+                          e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
+                        },
+                      })}
+                      placeholder={
+                        isEdit && employee?.aadhaarMasked
+                          ? employee.aadhaarMasked
+                          : "2345 6789 0123"
+                      }
+                      className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                      disabled={isPending}
+                      aria-invalid={!!errors.aadhaarNumber}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <InputGroupButton
+                              variant="ghost"
+                              size="icon-xs"
+                              tabIndex={-1}
+                              className="size-5 rounded-md hover:bg-muted/60"
+                            >
+                              <InfoIcon className="size-3.5 text-muted-foreground/70" />
+                            </InputGroupButton>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            12-digit Indian Aadhaar UID (starts with 2-9)
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.aadhaarNumber && (
+                    <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="size-3 shrink-0" />
+                      <span>{errors.aadhaarNumber.message}</span>
+                    </FieldError>
+                  )}
+                  {isEdit && employee?.aadhaarMasked && (
+                    <FieldDescription className="text-[10px] text-muted-foreground mt-0.5">
+                      Current stored: {employee.aadhaarMasked}
+                    </FieldDescription>
+                  )}
+                </Field>
+              </div>
+            </div>
+          </form>
+        </div>
 
         {/* Sticky Footer Actions */}
-        <SheetFooter className="px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-row items-center justify-end gap-2">
+        <DialogFooter className="bg-card sticky bottom-0 z-10 border-t border-border/70 px-5 py-2.5 sm:py-3 flex flex-row items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
             disabled={isPending}
-            className="text-xs h-8.5 px-4 cursor-pointer"
+            className="text-xs h-8 px-3 border-destructive/60 text-destructive hover:bg-destructive/10 hover:border-destructive hover:text-destructive cursor-pointer transition-colors inline-flex items-center gap-1.5"
           >
-            Cancel
+            <X className="size-3.5" />
+            <span>Cancel</span>
           </Button>
           <Button
             type="submit"
             form="employee-form"
             size="sm"
             disabled={isPending}
-            className="text-xs h-8.5 px-5 bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
+            className="text-xs h-8 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium cursor-pointer shadow-xs transition-colors focus-visible:ring-emerald-500/30 inline-flex items-center gap-1.5"
           >
             {isPending ? (
               <>
-                <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                Saving...
+                <Loader2 className="size-3.5 animate-spin" />
+                <span>Saving...</span>
               </>
             ) : isEdit ? (
-              "Save Changes"
+              <>
+                <Check className="size-3.5" />
+                <span>Save Changes</span>
+              </>
             ) : (
-              "Register Employee"
+              <>
+                <UserRoundPlus className="size-3.5" />
+                <span>Register Employee</span>
+              </>
             )}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    );
+  }
+
+// ─── Date Picker Sub-Component (ReUI c-calendar-1 Pattern with Strict Validation) ───
+function DatePickerField({
+  value,
+  onChange,
+  disabled,
+  hasError,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+  hasError?: boolean;
+}) {
+  const id = useId();
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const dateValue = value ? new Date(value + "T00:00:00") : undefined;
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild disabled={disabled}>
+        <Button
+          className={cn(
+            "group/pick-date w-full justify-between text-xs h-8 bg-background border border-border/80 hover:bg-muted/40 font-normal",
+            hasError && "border-destructive ring-2 ring-destructive/20"
+          )}
+          id={id}
+          variant="outline"
+          type="button"
+        >
+          <span
+            className={cn(
+              "truncate",
+              !dateValue && "text-muted-foreground/60"
+            )}
+          >
+            {dateValue ? format(dateValue, "LLL dd, y") : "Pick joining date"}
+          </span>
+          <CalendarIcon
+            aria-hidden="true"
+            className="text-muted-foreground/70 group-hover/pick-date:text-foreground shrink-0 size-3.5 transition-colors"
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0 border-none shadow-xl bg-transparent">
+        <Card className="p-0">
+          <CardContent className="p-0">
+            <Calendar
+              mode="single"
+              selected={dateValue}
+              defaultMonth={dateValue || today}
+              endMonth={today}
+              disabled={(d) => isAfter(startOfDay(d), today)}
+              onSelect={(d) => {
+                if (d) {
+                  if (isAfter(startOfDay(d), today)) return;
+                  onChange(format(d, "yyyy-MM-dd"));
+                  setIsOpen(false);
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
+      </PopoverContent>
+    </Popover>
   );
 }
+
+export const EmployeeFormDialog = EmployeeFormSheet;

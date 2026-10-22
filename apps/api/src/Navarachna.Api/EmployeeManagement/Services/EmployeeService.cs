@@ -18,17 +18,17 @@ public class EmployeeService(AppDbContext db)
         {
             var depts = department.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (depts.Length == 1)
-                q = q.Where(e => e.Department == depts[0] || e.Designation == depts[0]);
+                q = q.Where(e => e.Department == depts[0]);
             else if (depts.Length > 1)
-                q = q.Where(e => depts.Contains(e.Department) || depts.Contains(e.Designation));
+                q = q.Where(e => depts.Contains(e.Department));
         }
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.ToLower();
             q = q.Where(e => e.FirstName.ToLower().Contains(s) ||
                              (e.LastName != null && e.LastName.ToLower().Contains(s)) ||
-                             e.EmployeeCode.ToLower().Contains(s) ||
-                             e.Email.ToLower().Contains(s));
+                             e.Email.ToLower().Contains(s) ||
+                             e.Mobile.Contains(s));
         }
 
         var total = await q.CountAsync(ct);
@@ -51,10 +51,7 @@ public class EmployeeService(AppDbContext db)
         if (await db.Employees.IgnoreQueryFilters().AnyAsync(e => e.Email == r.Email, ct))
             throw new AppException(409, "An employee with this email already exists.");
 
-        var seq = await db.Database
-            .SqlQuery<int>($"SELECT nextval('employee_code_seq') AS \"Value\"").SingleAsync(ct);
-
-        var e = new Employee { EmployeeCode = $"EMP-{r.DateOfJoining.Year}-{seq:D5}" };
+        var e = new Employee();
         Apply(e, r);
         db.Employees.Add(e);
         await db.SaveChangesAsync(ct);
@@ -97,16 +94,15 @@ public class EmployeeService(AppDbContext db)
         e.PanNumber = r.PanNumber;
         if (!string.IsNullOrEmpty(r.AadhaarNumber)) e.AadhaarLast4 = r.AadhaarNumber[^4..];
         e.Department = r.Department;
-        e.Designation = r.Designation;
         e.Salary = r.Salary;
         e.DateOfJoining = r.DateOfJoining;
     }
 
     private static EmployeeResponse ToResponse(Employee e) => new(
-        e.Id, e.EmployeeCode, e.FirstName, e.LastName, e.Email, e.Mobile,
+        e.Id, e.FirstName, e.LastName, e.Email, e.Mobile,
         e.PanNumber is { Length: 10 } p ? $"{p[..5]}****{p[9]}" : null,
         e.AadhaarLast4 is null ? null : $"XXXX XXXX {e.AadhaarLast4}",
-        e.Department, e.Designation, e.Salary, e.DateOfJoining, e.IsActive, e.CreatedAt, e.Version,
+        e.Department, e.Salary, e.DateOfJoining, e.IsActive, e.CreatedAt, e.Version,
         e.Documents.Select(d => new DocumentResponse(d.Id, d.DocumentType, d.OriginalFileName,
             d.ContentType, d.SizeBytes, d.UploadedAt)).ToList());
 }

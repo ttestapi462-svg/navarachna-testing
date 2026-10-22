@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -43,6 +44,7 @@ import {
   FileCheck2,
   AlertCircle,
   FileSignature,
+  X,
 } from "lucide-react";
 
 interface EmployeeDocumentsSheetProps {
@@ -138,31 +140,40 @@ export function EmployeeDocumentsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        showCloseButton={false}
         className="sm:max-w-md w-full flex flex-col p-0 gap-0"
       >
-        {/* Header */}
-        <SheetHeader className="px-6 py-5 border-b border-border/60 bg-muted/20">
-          <div className="flex items-center gap-2">
-            <FileSignature className="size-4 text-primary" />
-            <SheetTitle className="text-base font-semibold text-foreground">
-              Artisan Documents
-            </SheetTitle>
-          </div>
-          <SheetDescription asChild>
-            <div className="text-xs text-muted-foreground mt-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{fullName}</span>
-                <span className="font-mono text-primary font-medium text-[11px]">
-                  {employee.employeeCode}
-                </span>
-              </div>
-              <div>
-                <Badge variant="outline" className="text-[10px] py-0 px-2 mt-0.5">
-                  {employee.department}
-                </Badge>
-              </div>
+        {/* Header with Light Pink Theme Color Accent */}
+        <SheetHeader className="px-6 py-4.5 border-b border-rose-200/70 dark:border-rose-900/40 bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40 text-foreground flex flex-row items-center justify-between gap-3 space-y-0 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-rose-200/90 dark:border-rose-900/60 shadow-xs shrink-0">
+              <FileSignature className="size-4.5 text-primary stroke-[1.8]" />
             </div>
-          </SheetDescription>
+            <div>
+              <SheetTitle className="text-sm sm:text-base font-semibold text-foreground">
+                Artisan Documents
+              </SheetTitle>
+              <SheetDescription asChild>
+                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+                  <span className="font-semibold text-foreground">{fullName}</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-2 bg-background/80 text-foreground border-border/80">
+                    {employee.department}
+                  </Badge>
+                </div>
+              </SheetDescription>
+            </div>
+          </div>
+          <SheetClose asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-rose-100/70 dark:hover:bg-rose-900/40 cursor-pointer shrink-0 transition-colors"
+            >
+              <X className="size-4.5" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </SheetClose>
         </SheetHeader>
 
         {/* Scrollable Content */}

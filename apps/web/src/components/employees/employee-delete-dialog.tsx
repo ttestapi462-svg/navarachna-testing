@@ -47,46 +47,49 @@ export function EmployeeDeleteDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-md">
-        <div className="flex items-start gap-3 py-1">
-          <div className="bg-destructive/10 dark:bg-destructive/10 rounded-full flex size-10 shrink-0 items-center justify-center">
-            <CircleAlertIcon className="text-destructive size-5" />
+      <AlertDialogContent
+        size="sm"
+        className="max-w-[360px] sm:max-w-[380px] p-4.5 gap-3.5 rounded-2xl shadow-xl border-border/60"
+      >
+        <div className="flex items-start gap-3">
+          <div className="bg-destructive/10 dark:bg-destructive/10 rounded-full flex size-8 shrink-0 items-center justify-center mt-0.5">
+            <CircleAlertIcon className="text-destructive size-4" />
           </div>
-          <div className="flex flex-col justify-center gap-1">
-            <AlertDialogTitle className="text-sm font-semibold">
+          <div className="flex flex-col gap-1 min-w-0">
+            <AlertDialogTitle className="text-sm font-semibold tracking-tight text-foreground">
               Deactivate employee?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground text-sm leading-relaxed">
+            <AlertDialogDescription className="text-muted-foreground text-xs leading-relaxed">
               Are you sure you want to deactivate{" "}
-              <span className="font-semibold text-foreground">{fullName}</span> (
-              <span className="font-mono text-primary font-medium">
-                {employee.employeeCode}
-              </span>
-              )? This will disable their account and archive their profile from
-              active studio operations.
+              <span className="font-semibold text-foreground">{fullName}</span>? This will disable their account and archive their profile.
             </AlertDialogDescription>
           </div>
         </div>
 
         {errorMessage && (
-          <div className="rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive font-medium">
+          <div className="rounded-md bg-destructive/10 p-2 text-[11px] text-destructive font-medium">
             {errorMessage}
           </div>
         )}
 
-        <AlertDialogFooter className="mt-2">
-          <AlertDialogCancel disabled={deleteMutation.isPending}>
+        <AlertDialogFooter className="gap-2 sm:gap-2 pt-0.5">
+          <AlertDialogCancel
+            size="sm"
+            disabled={deleteMutation.isPending}
+            className="h-8 px-3 text-xs"
+          >
             Keep Employee
           </AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
+            size="sm"
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
-            className="cursor-pointer"
+            className="h-8 px-3 text-xs cursor-pointer"
           >
             {deleteMutation.isPending ? (
               <>
-                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                <Loader2 className="size-3 animate-spin mr-1" />
                 Deactivating...
               </>
             ) : (
