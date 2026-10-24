@@ -10,12 +10,23 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,6 +46,7 @@ import {
   type EmployeeResponse,
   type DocumentResponse,
 } from "@/types/employee";
+import { toast } from "@/components/ui/sonner";
 import {
   FileText,
   UploadCloud,
@@ -70,7 +82,7 @@ export function EmployeeDocumentsSheet({
     DocumentType.Aadhaar
   );
   const [fileError, setFileError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [docToDelete, setDocToDelete] = useState<DocumentResponse | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,11 +103,16 @@ export function EmployeeDocumentsSheet({
     setFileError(null);
 
     if (file.size > MAX_FILE_SIZE) {
-      setFileError("File exceeds the maximum limit of 6 MB.");
+      const msg = `"${file.name}" exceeds the maximum limit of 6 MB.`;
+      setFileError(msg);
+      toast.warning("File size limit exceeded", {
+        description: msg,
+      });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
+    const docTypeLabel = DocumentTypeLabels[selectedType] || "Document";
     try {
       await uploadMutation.mutateAsync({
         employeeId: employee.id,
@@ -103,36 +120,59 @@ export function EmployeeDocumentsSheet({
         file,
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.success("Document uploaded successfully", {
+        description: `${docTypeLabel} (${file.name}) was attached to ${fullName}'s profile.`,
+      });
       refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed.";
       setFileError(msg);
+      toast.error("Upload failed", {
+        description: msg,
+      });
     }
   };
 
   const handleDownload = async (doc: DocumentResponse) => {
     setDownloadingId(doc.id);
+    toast.info("Preparing download", {
+      description: `Downloading ${doc.fileName}...`,
+    });
     try {
       await downloadDocument(employee.id, doc.id, doc.fileName);
-    } catch (err) {
+      toast.success("Download started", {
+        description: doc.fileName,
+      });
+    } catch (err: unknown) {
       console.error("Failed to download file", err);
+      const msg = err instanceof Error ? err.message : "Could not retrieve document from server.";
+      toast.error("Download failed", {
+        description: msg,
+      });
     } finally {
       setDownloadingId(null);
     }
   };
 
-  const handleDelete = async (docId: number) => {
-    setDeletingId(docId);
+  const handleConfirmDelete = async () => {
+    if (!docToDelete) return;
+    const targetDoc = docToDelete;
     try {
       await deleteMutation.mutateAsync({
         employeeId: employee.id,
-        docId,
+        docId: targetDoc.id,
       });
+      toast.success("Document deleted", {
+        description: `"${targetDoc.fileName}" was removed successfully.`,
+      });
+      setDocToDelete(null);
       refetch();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to delete document", err);
-    } finally {
-      setDeletingId(null);
+      const msg = err instanceof Error ? err.message : "Failed to delete document.";
+      toast.error("Delete failed", {
+        description: msg,
+      });
     }
   };
 
@@ -189,32 +229,34 @@ export function EmployeeDocumentsSheet({
             </div>
 
             <div className="space-y-2.5">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">
+              <Field className="space-y-1.5 w-full">
+                <FieldLabel className="text-xs font-medium text-muted-foreground">
                   Document Type
-                </label>
+                </FieldLabel>
                 <Select
                   value={String(selectedType)}
                   onValueChange={(val) =>
                     setSelectedType(Number(val) as DocumentType)
                   }
                 >
-                  <SelectTrigger className="w-full h-9 text-xs sm:text-sm">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select document type" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={String(DocumentType.Aadhaar)}>
-                      {DocumentTypeLabels[DocumentType.Aadhaar]}
-                    </SelectItem>
-                    <SelectItem value={String(DocumentType.Pan)}>
-                      {DocumentTypeLabels[DocumentType.Pan]}
-                    </SelectItem>
-                    <SelectItem value={String(DocumentType.Other)}>
-                      {DocumentTypeLabels[DocumentType.Other]}
-                    </SelectItem>
+                  <SelectContent position="popper" sideOffset={4} className="z-[70]">
+                    <SelectGroup>
+                      <SelectItem value={String(DocumentType.Aadhaar)}>
+                        {DocumentTypeLabels[DocumentType.Aadhaar]}
+                      </SelectItem>
+                      <SelectItem value={String(DocumentType.Pan)}>
+                        {DocumentTypeLabels[DocumentType.Pan]}
+                      </SelectItem>
+                      <SelectItem value={String(DocumentType.Other)}>
+                        {DocumentTypeLabels[DocumentType.Other]}
+                      </SelectItem>
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
 
               <div className="pt-1">
                 <input
@@ -285,7 +327,7 @@ export function EmployeeDocumentsSheet({
                   const typeLabel =
                     DocumentTypeLabels[doc.documentType] || "Document";
                   const isDownloading = downloadingId === doc.id;
-                  const isDeleting = deletingId === doc.id;
+                  const isDeleting = deleteMutation.isPending && docToDelete?.id === doc.id;
 
                   return (
                     <div
@@ -353,9 +395,9 @@ export function EmployeeDocumentsSheet({
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="size-7 text-muted-foreground hover:text-destructive cursor-pointer"
+                              className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
                               aria-label="Delete document"
-                              onClick={() => handleDelete(doc.id)}
+                              onClick={() => setDocToDelete(doc)}
                               disabled={isDownloading || isDeleting}
                             >
                               {isDeleting ? (
@@ -378,6 +420,96 @@ export function EmployeeDocumentsSheet({
           </div>
         </div>
       </SheetContent>
+
+      {/* Document Deletion Confirmation Dialog - Compact @reui/c-alert-dialog-8 */}
+      <AlertDialog
+        open={Boolean(docToDelete)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !deleteMutation.isPending) {
+            setDocToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent
+          className="w-[calc(100vw-2rem)] sm:w-full max-w-[360px] p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-[70] overflow-hidden"
+        >
+          {/* Compact Content Body */}
+          <div className="p-4 sm:p-4.5 pb-3 sm:pb-3.5 min-w-0">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="size-9 rounded-full bg-rose-50 text-rose-600 border border-rose-200/90 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-900/60 flex items-center justify-center shrink-0 mt-0.5">
+                <Trash2 className="size-4.5" />
+              </div>
+              <div className="flex flex-col justify-center min-w-0 flex-1">
+                <AlertDialogTitle className="text-sm font-semibold tracking-tight text-foreground leading-snug">
+                  Delete document?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-muted-foreground leading-normal mt-0.5">
+                  Are you sure you want to permanently delete this file from{" "}
+                  <span className="font-semibold text-foreground">{fullName}</span>&apos;s
+                  compliance profile?
+                </AlertDialogDescription>
+              </div>
+            </div>
+
+            {/* Compact document preview card */}
+            {docToDelete && (
+              <div className="mt-2.5 w-full rounded-xl bg-slate-50/80 dark:bg-zinc-900/50 border border-slate-200/90 dark:border-zinc-800 p-2 px-2.5 flex items-center gap-2.5 min-w-0 overflow-hidden">
+                <div className="size-7 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 flex items-center justify-center shrink-0">
+                  <FileText className="size-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="font-medium text-foreground text-xs truncate leading-tight"
+                    title={docToDelete.fileName}
+                  >
+                    {docToDelete.fileName}
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                    <span className="font-medium text-rose-600 dark:text-rose-400">
+                      {DocumentTypeLabels[docToDelete.documentType] || "Document"}
+                    </span>
+                    <span>•</span>
+                    <span>{formatFileSize(docToDelete.sizeBytes)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Warning notice */}
+            <p className="mt-2 text-[11px] font-medium text-destructive leading-tight">
+              This action cannot be undone.
+            </p>
+          </div>
+
+          {/* Full-width Divider & Tinted Footer with Compact Right-Aligned Pill Buttons */}
+          <AlertDialogFooter className="border-t border-slate-200/90 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
+            <AlertDialogCancel
+              disabled={deleteMutation.isPending}
+              className="h-8 px-3 rounded-full text-xs font-medium border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors shadow-2xs"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteMutation.isPending}
+              className="h-8 px-3.5 rounded-full text-xs font-semibold cursor-pointer shadow-2xs transition-colors bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/90 dark:bg-rose-950/60 dark:hover:bg-rose-950/90 dark:text-rose-400 dark:border-rose-900/70 flex items-center justify-center gap-1.5"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="size-3 animate-spin mr-1" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="size-3.5" />
+                  Delete File
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }

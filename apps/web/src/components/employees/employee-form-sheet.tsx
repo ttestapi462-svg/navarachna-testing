@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useId, useMemo, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "@/components/ui/sonner";
+import { ApiError } from "@/lib/api-client";
 import { format, isAfter, startOfDay } from "date-fns";
 import {
   Dialog,
@@ -199,6 +201,9 @@ function EmployeeFormDialogContent({
           version: employee.version,
         };
         await updateMutation.mutateAsync({ id: employee.id, data: payload });
+        toast.success("Profile updated successfully", {
+          description: `${data.firstName} ${data.lastName || ""}'s employee records were saved.`,
+        });
       } else {
         const payload: EmployeeRequest = {
           firstName: data.firstName.trim(),
@@ -212,13 +217,40 @@ function EmployeeFormDialogContent({
           dateOfJoining: data.dateOfJoining,
         };
         await createMutation.mutateAsync(payload);
+        toast.success("Employee registered successfully", {
+          description: `${data.firstName} ${data.lastName || ""} was added as ${data.department}.`,
+        });
       }
       onOpenChange(false);
     } catch (err: unknown) {
+      const isConflict =
+        (err instanceof ApiError && err.status === 409) ||
+        (err instanceof Error && /conflict|already exists|in use/i.test(err.message));
       const msg =
         err instanceof Error ? err.message : "An unexpected error occurred.";
       setConflictError(msg);
+
+      if (isConflict) {
+        toast.warning("Conflict detected", {
+          description: msg,
+        });
+      } else {
+        toast.error(isEdit ? "Failed to update employee" : "Failed to register employee", {
+          description: msg,
+        });
+      }
     }
+  };
+
+  const onInvalid = (fieldErrors: FieldErrors<EmployeeFormData>) => {
+    const errorCount = Object.keys(fieldErrors).length;
+    const firstMsg = Object.values(fieldErrors).find((e) => e?.message)?.message;
+    toast.warning("Please check required fields", {
+      description:
+        typeof firstMsg === "string"
+          ? firstMsg
+          : `Please review ${errorCount} incomplete or invalid field${errorCount > 1 ? "s" : ""}.`,
+    });
   };
 
   const isPending =
@@ -276,7 +308,7 @@ function EmployeeFormDialogContent({
           <form
             id="employee-form"
             noValidate
-            onSubmit={handleSubmit(onSubmit)}
+            onSubmit={handleSubmit(onSubmit, onInvalid)}
             className="space-y-3"
           >
             {conflictError && (
@@ -473,13 +505,14 @@ function EmployeeFormDialogContent({
                           value={field.value}
                           onValueChange={(val) => field.onChange(val as string)}
                           itemToStringValue={(item: string) => item}
+                          filter={null}
                         >
                           <ComboboxTrigger
                             render={
                               <Button
                                 variant="outline"
                                 className={cn(
-                                  "h-8 w-full justify-between font-normal text-xs bg-background border-border/80 px-2.5",
+                                  "h-8 w-full justify-between font-normal text-xs rounded-xl bg-muted/30 border-border/70 px-2.5 hover:bg-muted/50 transition-colors",
                                   errors.department && "border-destructive ring-2 ring-destructive/20"
                                 )}
                                 disabled={isPending}
@@ -509,16 +542,11 @@ function EmployeeFormDialogContent({
                               }}
                             </ComboboxValue>
                           </ComboboxTrigger>
-                          <ComboboxContent className="w-(--anchor-width) min-w-[240px] max-w-xs rounded-xl border border-border/70 shadow-xl bg-popover p-1.5 overflow-hidden flex flex-col">
-                            <ComboboxInput
-                              showTrigger={false}
-                              placeholder="Search department..."
-                              className="h-8 text-xs mb-1 shrink-0"
-                            />
-                            <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground">
+                          <ComboboxContent className="rounded-xl border border-border/60 shadow-lg bg-popover/95 backdrop-blur-md min-w-56 max-h-80 overflow-hidden">
+                            <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground text-center">
                               No departments found.
                             </ComboboxEmpty>
-                            <ComboboxList className="max-h-52 overflow-y-auto overscroll-contain pr-1">
+                            <ComboboxList className="p-0.5 pr-1.5 max-h-60 overflow-y-auto space-y-0.5">
                               {(item: string) => {
                                 const meta = getDesignationMeta(item);
                                 const Icon = meta.icon;
@@ -526,17 +554,17 @@ function EmployeeFormDialogContent({
                                   <ComboboxItem
                                     key={item}
                                     value={item}
-                                    className="text-xs py-1.5 px-2 rounded-md cursor-pointer flex items-center gap-2 hover:bg-muted/70 transition-colors"
+                                    className="text-xs py-1.5 pr-7 pl-2 rounded-lg cursor-pointer flex items-center gap-2 hover:bg-muted/70 transition-colors"
                                   >
                                     <div
                                       className={cn(
-                                        "flex size-5 items-center justify-center rounded-md shrink-0 shadow-2xs",
+                                        "flex size-5 items-center justify-center rounded-full shrink-0 shadow-2xs",
                                         meta.bgLight
                                       )}
                                     >
                                       <Icon className={cn("size-3", meta.iconColor)} />
                                     </div>
-                                    <span className="font-medium text-foreground">{item}</span>
+                                    <span className="font-medium text-foreground truncate">{item}</span>
                                   </ComboboxItem>
                                 );
                               }}

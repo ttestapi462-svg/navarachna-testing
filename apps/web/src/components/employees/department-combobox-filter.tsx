@@ -77,7 +77,7 @@ export function DepartmentComboboxFilter({
           className="rounded-xl border border-border/60 shadow-lg bg-popover/95 backdrop-blur-md min-w-56 max-h-80 overflow-hidden"
         >
           <ComboboxEmpty>No items found.</ComboboxEmpty>
-          <ComboboxList className="p-1 max-h-76 overflow-y-auto">
+          <ComboboxList className="p-0.5 pr-1.5 max-h-60 overflow-y-auto space-y-0.5">
             {(item: string) => {
               const meta = getDesignationMeta(item);
               const Icon = meta.icon;
@@ -85,17 +85,17 @@ export function DepartmentComboboxFilter({
                 <ComboboxItem
                   key={item}
                   value={item}
-                  className="text-xs py-1.5 px-2 rounded-md cursor-pointer flex items-center gap-2 hover:bg-muted/60"
+                  className="text-xs py-1.5 pr-7 pl-2 rounded-lg cursor-pointer flex items-center gap-2 hover:bg-muted/70 transition-colors"
                 >
                   <div
                     className={cn(
-                      "flex size-5 items-center justify-center rounded-md shrink-0",
+                      "flex size-5 items-center justify-center rounded-full shrink-0 shadow-2xs",
                       meta.bgLight
                     )}
                   >
                     <Icon className={cn("size-3", meta.iconColor)} />
                   </div>
-                  <span className="font-medium text-foreground">{item}</span>
+                  <span className="font-medium text-foreground truncate">{item}</span>
                 </ComboboxItem>
               );
             }}

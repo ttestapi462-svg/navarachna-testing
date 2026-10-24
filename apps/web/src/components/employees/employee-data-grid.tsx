@@ -38,6 +38,7 @@ import { useEmployees } from "@/services/employee-service";
 import { DEPARTMENTS } from "@/lib/validations/employee";
 import { DesignationBadge, getDesignationMeta } from "@/lib/designation-config";
 import type { EmployeeResponse } from "@/types/employee";
+import { toast } from "@/components/ui/sonner";
 import {
   Search,
   PlusIcon,
@@ -52,6 +53,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
+  Copy,
 } from "lucide-react";
 
 interface EmployeeDataGridProps {
@@ -107,7 +109,7 @@ function EmployeeDataGridComponent({
   }, [searchInput]);
 
   // Paginated query hook for the active table
-  const { data, isLoading, isFetching, refetch } = useEmployees({
+  const { data, isLoading, isFetching, isError, error, refetch } = useEmployees({
     search: debouncedSearch || undefined,
     department:
       selectedDepartments.length > 0
@@ -116,6 +118,33 @@ function EmployeeDataGridComponent({
     page: pagination.pageIndex + 1,
     pageSize: pagination.pageSize,
   });
+
+  useEffect(() => {
+    if (isError && error) {
+      toast.error("Failed to load employee directory", {
+        description: error instanceof Error ? error.message : "Unable to reach server.",
+      });
+    }
+  }, [isError, error]);
+
+  const handleRefresh = async () => {
+    try {
+      const res = await refetch();
+      if (res.isSuccess) {
+        toast.success("Employee directory refreshed", {
+          description: "Latest records and studio statistics synchronized.",
+        });
+      } else if (res.isError) {
+        toast.error("Failed to refresh directory", {
+          description: res.error instanceof Error ? res.error.message : "Network error.",
+        });
+      }
+    } catch (err: unknown) {
+      toast.error("Failed to refresh directory", {
+        description: err instanceof Error ? err.message : "Network error.",
+      });
+    }
+  };
 
   // Query hook to calculate cumulative studio KPI statistics
   const { data: statsData, isLoading: statsLoading } = useEmployees({
@@ -381,10 +410,23 @@ function EmployeeDataGridComponent({
                     <FileText className="size-3.5 text-muted-foreground" />
                     <span>Documents</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      navigator.clipboard.writeText(emp.email);
+                      toast.info("Copied to clipboard", {
+                        description: `Copied ${emp.email}`,
+                      });
+                    }}
+                    className="text-xs gap-2 py-1.5 cursor-pointer"
+                  >
+                    <Copy className="size-3.5 text-muted-foreground" />
+                    <span>Copy Email</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
+                    variant="destructive"
                     onClick={() => onDeleteEmployee(emp)}
-                    className="text-xs gap-2 py-1.5 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                    className="text-xs gap-2 py-1.5 cursor-pointer font-medium"
                   >
                     <Trash2 className="size-3.5" />
                     <span>Deactivate</span>
@@ -587,7 +629,7 @@ function EmployeeDataGridComponent({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => refetch()}
+                  onClick={handleRefresh}
                   disabled={isFetching}
                   className="h-8 px-2.5 gap-1.5 rounded-lg text-xs font-medium border-border/70 hover:bg-muted/60 cursor-pointer"
                 >

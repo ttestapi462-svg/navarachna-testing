@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SidebarUserMenu } from "./sidebar-user-menu";
+import { StudioLogoIcon, StudioBrandMark } from "@/components/brand/studio-logo";
 import {
   Layers,
   LayoutDashboard,
@@ -298,27 +299,17 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar font-sans select-none">
       {/* 1. Header: Refined Atelier Crest & Title + Desktop Shrink / Expand Trigger */}
-      <SidebarHeader className="h-14 border-b border-sidebar-border/60 px-3 flex flex-row items-center justify-between group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
-        {/* Full Brand Crest & Title (Expanded Mode) */}
+      <SidebarHeader className="h-16 border-b border-sidebar-border/60 pl-3.5 pr-2.5 flex flex-row items-center justify-between gap-3 overflow-hidden group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center">
+        {/* Full Brand Logo (Expanded Mode Only) */}
         <Link
           href="/"
-          className="flex items-center gap-2.5 group-data-[collapsible=icon]:hidden hover:opacity-90 transition-opacity min-w-0"
+          className="flex items-center flex-1 min-w-0 h-11 overflow-hidden hover:opacity-90 transition-opacity py-0.5 group-data-[collapsible=icon]:hidden"
         >
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs shrink-0">
-            <Layers className="size-4" />
-          </div>
-          <div className="grid flex-1 text-left leading-none truncate">
-            <span className="font-semibold text-foreground text-xs tracking-tight truncate">
-              Navarachna
-            </span>
-            <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5 truncate">
-              Designer Studio
-            </span>
-          </div>
+          <StudioBrandMark variant="horizontal" height={35} gap={16} className="w-auto justify-start" priority />
         </Link>
 
-        {/* Sidebar Close Button on the Right Side of Menu Header (Expanded Mode) */}
-        <div className="group-data-[collapsible=icon]:hidden">
+        {/* Sidebar Close Button on the Right Side of Menu Header (Expanded Mode Only) */}
+        <div className="shrink-0 flex items-center justify-center group-data-[collapsible=icon]:hidden">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -337,25 +328,25 @@ export function AppSidebar() {
           </Tooltip>
         </div>
 
-        {/* Morphing Crest / Toggle Icon (Collapsed Mode):
-            Default: displays the Atelier crest avatar (Layers inside primary crimson).
-            On hover: replaces with the INDEPENDENT toggle button (PanelLeft on clean ghost/muted background, not inside the avatar). */}
-        <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center">
+        {/* Morphing Crest / Toggle Icon (Collapsed Mode Only):
+            Default: displays the authentic Atelier emblem in crisp app-icon badge, perfectly centered.
+            On hover: replaces with the INDEPENDENT toggle button (PanelLeft on clean ghost/muted background). */}
+        <div className="hidden group-data-[collapsible=icon]:flex size-full items-center justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="group/toggle relative flex size-8 items-center justify-center rounded-lg cursor-pointer transition-all active:scale-95 select-none"
+                className="group/toggle relative flex size-8 items-center justify-center rounded-lg cursor-pointer transition-all active:scale-95 select-none shrink-0"
                 aria-label="Expand sidebar"
               >
-                {/* 1. Default: Atelier Crest Avatar (Crimson background + Layers) */}
-                <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs transition-all duration-150 group-hover/toggle:opacity-0 group-hover/toggle:scale-75 absolute">
-                  <Layers className="size-4" />
+                {/* 1. Default: Authentic Atelier Emblem (Centered & Balanced) */}
+                <div className="absolute inset-0 size-8 rounded-lg bg-white border border-rose-200/80 flex items-center justify-center shadow-xs transition-all duration-150 group-hover/toggle:opacity-0 group-hover/toggle:scale-75">
+                  <StudioLogoIcon size={20} />
                 </div>
 
-                {/* 2. Hover: Independent Toggle Button (No red avatar! Clean ghost/muted button + PanelLeft) */}
-                <div className="size-8 rounded-lg bg-muted text-foreground border border-border/70 flex items-center justify-center shadow-2xs transition-all duration-150 opacity-0 scale-75 group-hover/toggle:opacity-100 group-hover/toggle:scale-100">
+                {/* 2. Hover: Independent Toggle Button (Clean ghost/muted button + PanelLeft) */}
+                <div className="absolute inset-0 size-8 rounded-lg bg-muted text-foreground border border-border/70 flex items-center justify-center shadow-2xs transition-all duration-150 opacity-0 scale-75 group-hover/toggle:opacity-100 group-hover/toggle:scale-100">
                   <PanelLeft className="size-4" />
                 </div>
               </button>

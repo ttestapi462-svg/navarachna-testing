@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
-import { useFocusScopeBranch } from "@radix-ui/react-focus-scope"
 import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
@@ -106,88 +105,46 @@ const ComboboxContent = React.forwardRef<
   },
   forwardedRef
 ) {
-  const [popupNode, setPopupNode] = React.useState<HTMLDivElement | null>(null);
+  const cleanupRef = React.useRef<(() => void) | null>(null);
 
-  // Register popup element with Radix FocusScope / Dialog so react-remove-scroll treats it as an allowed shard
-  useFocusScopeBranch(popupNode);
-
-  React.useEffect(() => {
-    if (!popupNode) return;
-
-    // Capture-phase wheel listener on the popup container:
-    // 1. Catches wheel events anywhere within the popup (items, list, padding, search input).
-    // 2. Normalizes deltaMode (lines on Windows standard mouse wheel vs pixels on trackpads).
-    // 3. Directly scrolls the list via `scrollTop += delta`, completely bypassing any browser or modal scroll locks.
-    // 4. Calls stopPropagation() and preventDefault() to prevent outer modal / document scroll interference.
-    const handleWheel = (e: WheelEvent) => {
-      const list = popupNode.querySelector('[data-slot="combobox-list"]') as HTMLElement | null;
-      if (!list) return;
-
-      // Always stop propagation so document-level react-remove-scroll never sees this event
-      e.stopPropagation();
-
-      if (list.scrollHeight <= list.clientHeight) return;
-
-      // Normalize delta based on deltaMode:
-      // 0 = DOM_DELTA_PIXEL (trackpad / precision wheel)
-      // 1 = DOM_DELTA_LINE (Windows standard mouse wheel: 3 lines per notch)
-      // 2 = DOM_DELTA_PAGE
-      let delta = e.deltaY;
-      if (e.deltaMode === 1) {
-        delta *= 28; // ~28px per item height
-      } else if (e.deltaMode === 2) {
-        delta *= list.clientHeight;
-      }
-
-      const canScrollDown = delta > 0 && list.scrollTop + list.clientHeight < list.scrollHeight - 0.5;
-      const canScrollUp = delta < 0 && list.scrollTop > 0.5;
-
-      if (canScrollDown || canScrollUp) {
-        e.preventDefault();
-        list.scrollTop += delta;
-      }
-    };
-
-    let touchStartY = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        touchStartY = e.touches[0].clientY;
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const list = popupNode.querySelector('[data-slot="combobox-list"]') as HTMLElement | null;
-      if (!list) return;
-
-      const currentY = e.touches[0].clientY;
-      const delta = touchStartY - currentY;
-      touchStartY = currentY;
-
-      const canScrollDown = delta > 0 && list.scrollTop + list.clientHeight < list.scrollHeight - 0.5;
-      const canScrollUp = delta < 0 && list.scrollTop > 0.5;
-
-      if (canScrollDown || canScrollUp) {
-        e.stopPropagation();
-        e.preventDefault();
-        list.scrollTop += delta;
-      }
-    };
-
-    popupNode.addEventListener("wheel", handleWheel, { passive: false, capture: true });
-    popupNode.addEventListener("touchstart", handleTouchStart, { passive: true, capture: true });
-    popupNode.addEventListener("touchmove", handleTouchMove, { passive: false, capture: true });
-
-    return () => {
-      popupNode.removeEventListener("wheel", handleWheel, { capture: true });
-      popupNode.removeEventListener("touchstart", handleTouchStart, { capture: true });
-      popupNode.removeEventListener("touchmove", handleTouchMove, { capture: true });
-    };
-  }, [popupNode]);
-
-  const handleRef = React.useCallback(
+  // Listen on wheel and touchmove events directly on the popup:
+  // 1. Always stop propagation so outer modal scroll-locks (react-remove-scroll) never cancel mouse scrolling.
+  // 2. Prevent default and directly scroll the list container so mouse wheel always scrolls smoothly and instantly.
+  const handlePopupRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      setPopupNode(node);
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+
+      if (node) {
+        const handleWheel = (e: WheelEvent) => {
+          const list = node.querySelector('[data-slot="combobox-list"]') as HTMLElement | null;
+          if (!list || list.scrollHeight <= list.clientHeight) return;
+
+          e.stopPropagation();
+          e.preventDefault();
+
+          let delta = e.deltaY;
+          if (e.deltaMode === 1) delta *= 28;
+          else if (e.deltaMode === 2) delta *= list.clientHeight;
+
+          list.scrollTop += delta;
+        };
+
+        const stopTouch = (e: TouchEvent) => {
+          e.stopPropagation();
+        };
+
+        node.addEventListener("wheel", handleWheel, { passive: false });
+        node.addEventListener("touchmove", stopTouch, { passive: true });
+
+        cleanupRef.current = () => {
+          node.removeEventListener("wheel", handleWheel);
+          node.removeEventListener("touchmove", stopTouch);
+        };
+      }
+
       if (typeof forwardedRef === "function") {
         forwardedRef(node);
       } else if (forwardedRef) {
@@ -205,14 +162,14 @@ const ComboboxContent = React.forwardRef<
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="isolate z-50"
+        className="isolate z-[100] pointer-events-auto"
       >
         <ComboboxPrimitive.Popup
-          ref={handleRef}
+          ref={handlePopupRef}
           data-slot="combobox-content"
           data-chips={!!anchor}
           className={cn(
-            "group/combobox-content flex flex-col max-h-80 w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+1.75rem)] origin-(--transform-origin) overflow-hidden rounded-2xl text-popover-foreground shadow-xl ring-1 ring-foreground/10 duration-100 bg-popover relative",
+            "group/combobox-content pointer-events-auto flex flex-col max-h-80 w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+1.75rem)] origin-(--transform-origin) overflow-hidden rounded-2xl text-popover-foreground shadow-xl ring-1 ring-foreground/10 duration-100 bg-popover relative",
             className
           )}
           {...props}
@@ -225,45 +182,13 @@ const ComboboxContent = React.forwardRef<
 const ComboboxList = React.forwardRef<
   HTMLDivElement,
   ComboboxPrimitive.List.Props
->(function ComboboxList({ className, onWheel, ...props }, forwardedRef) {
-  const internalRef = React.useRef<HTMLDivElement | null>(null);
-
-  const handleRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      internalRef.current = node;
-      if (typeof forwardedRef === "function") {
-        forwardedRef(node);
-      } else if (forwardedRef) {
-        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }
-    },
-    [forwardedRef]
-  );
-
+>(function ComboboxList({ className, ...props }, forwardedRef) {
   return (
     <ComboboxPrimitive.List
-      ref={handleRef}
+      ref={forwardedRef}
       data-slot="combobox-list"
-      onWheel={(e) => {
-        const el = internalRef.current;
-        if (el && el.scrollHeight > el.clientHeight) {
-          e.stopPropagation();
-          let delta = e.deltaY;
-          if (e.deltaMode === 1) delta *= 28;
-          else if (e.deltaMode === 2) delta *= el.clientHeight;
-
-          const canScrollDown = delta > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 0.5;
-          const canScrollUp = delta < 0 && el.scrollTop > 0.5;
-
-          if (canScrollDown || canScrollUp) {
-            e.preventDefault();
-            el.scrollTop += delta;
-          }
-        }
-        onWheel?.(e);
-      }}
       className={cn(
-        "flex-1 min-h-0 overflow-y-auto overscroll-contain p-1.5 scroll-py-1 data-empty:p-0 [scrollbar-width:thin] [scrollbar-color:var(--scrollbar-thumb)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-thumb]:rounded-full",
+        "flex-1 min-h-0 overflow-y-auto overscroll-contain p-1 pr-1.5 scroll-py-1 data-empty:p-0 [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-button]:w-0 [&::-webkit-scrollbar-button]:h-0",
         className
       )}
       {...props}
@@ -280,7 +205,7 @@ function ComboboxItem({
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex w-full cursor-default items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -314,7 +239,7 @@ function ComboboxLabel({
   return (
     <ComboboxPrimitive.GroupLabel
       data-slot="combobox-label"
-      className={cn("px-3 py-2.5 text-xs text-muted-foreground", className)}
+      className={cn("px-3 py-2 text-xs text-muted-foreground", className)}
       {...props}
     />
   )
@@ -331,7 +256,7 @@ function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
     <ComboboxPrimitive.Empty
       data-slot="combobox-empty"
       className={cn(
-        "hidden w-full justify-center py-2 text-center text-sm text-muted-foreground group-data-empty/combobox-content:flex",
+        "hidden w-full justify-center py-2 text-center text-xs text-muted-foreground group-data-empty/combobox-content:flex",
         className
       )}
       {...props}
@@ -346,7 +271,7 @@ function ComboboxSeparator({
   return (
     <ComboboxPrimitive.Separator
       data-slot="combobox-separator"
-      className={cn("-mx-1.5 my-1.5 h-px bg-border", className)}
+      className={cn("-mx-1 my-1 h-px bg-border", className)}
       {...props}
     />
   )
@@ -407,7 +332,10 @@ function ComboboxChipsInput({
   return (
     <ComboboxPrimitive.Input
       data-slot="combobox-chip-input"
-      className={cn("min-w-20 flex-1 text-xs sm:text-sm outline-none placeholder:text-muted-foreground bg-transparent", className)}
+      className={cn(
+        "min-w-20 flex-1 text-xs sm:text-sm outline-none placeholder:text-muted-foreground bg-transparent",
+        className
+      )}
       {...props}
     />
   )

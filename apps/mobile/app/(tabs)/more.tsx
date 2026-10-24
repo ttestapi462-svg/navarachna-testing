@@ -107,7 +107,7 @@ export default function MoreScreen() {
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 items-center justify-center">
-              <QrCode size={18} color="#e11d48" />
+              <QrCode size={18} color="#9E1B38" />
             </View>
             <View>
               <Text className="text-sm font-bold text-slate-900">
@@ -133,7 +133,7 @@ export default function MoreScreen() {
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 items-center justify-center">
-              <Ruler size={18} color="#e11d48" />
+              <Ruler size={18} color="#9E1B38" />
             </View>
             <View>
               <Text className="text-sm font-bold text-slate-900">
@@ -159,7 +159,7 @@ export default function MoreScreen() {
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 items-center justify-center">
-              <Scissors size={18} color="#e11d48" />
+              <Scissors size={18} color="#9E1B38" />
             </View>
             <View>
               <Text className="text-sm font-bold text-slate-900">
@@ -238,7 +238,7 @@ export default function MoreScreen() {
         activeOpacity={0.8}
         className="bg-white border border-rose-200 rounded-3xl p-4 flex-row items-center justify-center gap-2 mb-2 shadow-xs"
       >
-        <LogOut size={18} color="#e11d48" />
+        <LogOut size={18} color="#9E1B38" />
         <Text className="text-sm font-bold text-rose-600">
           Sign Out of Atelier Session
         </Text>

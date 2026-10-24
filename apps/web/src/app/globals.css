@@ -7,6 +7,9 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --font-brand: var(--font-brand);
+  --color-brand-crimson: #9E1B38;
+  --color-brand-navy: #1E2246;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,8 +66,8 @@
   --card-foreground: oklch(0.148 0.004 228.8);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.514 0.222 16.935);
-  --primary-foreground: oklch(0.969 0.015 12.422);
+  --primary: oklch(0.465 0.170 15.3);
+  --primary-foreground: oklch(0.985 0.005 15.0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.963 0.002 197.1);
@@ -74,16 +77,16 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.925 0.005 214.3);
   --input: oklch(0.925 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.81 0.117 11.638);
-  --chart-2: oklch(0.645 0.246 16.439);
-  --chart-3: oklch(0.586 0.253 17.585);
-  --chart-4: oklch(0.514 0.222 16.935);
-  --chart-5: oklch(0.455 0.188 13.697);
+  --ring: oklch(0.465 0.170 15.3 / 30%);
+  --chart-1: #9E1B38;
+  --chart-2: #1E2246;
+  --chart-3: #552240;
+  --chart-4: #D91E4A;
+  --chart-5: #3D498C;
   --radius: 0.625rem;
   --sidebar: oklch(0.987 0.002 197.1);
   --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.586 0.253 17.585);
+  --sidebar-primary: oklch(0.465 0.170 15.3);
   --sidebar-primary-foreground: oklch(0.969 0.015 12.422);
   --sidebar-accent: oklch(0.963 0.002 197.1);
   --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
@@ -168,6 +171,12 @@
     height: 8px;
   }
 
+  *::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
   *::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
   }
@@ -223,4 +232,21 @@
     background-color: var(--scrollbar-thumb-hover);
     border-width: 1.5px;
   }
+}
+
+/* ─── ReUI Sonner Container Enhancements ─── */
+[data-sonner-toaster] {
+  --width: 340px !important;
+}
+
+[data-sonner-toast] {
+  overflow: visible !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  display: none !important;
 }
