@@ -208,3 +208,11 @@ export function StudioBrandMark({
     </div>
   );
 }
+
+export {
+  StudioAnimatedLogo,
+  StudioLoader,
+  type StudioAnimatedLogoProps,
+  type StudioLoaderProps,
+} from "./studio-loader";
+

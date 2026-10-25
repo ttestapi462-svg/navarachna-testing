@@ -30,6 +30,7 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { StudioLoader } from "@/components/brand/studio-loader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -436,13 +437,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-rose-600" />
-        </div>
-      }
-    >
+    <Suspense fallback={<StudioLoader />}>
       <LoginContent />
     </Suspense>
   );
