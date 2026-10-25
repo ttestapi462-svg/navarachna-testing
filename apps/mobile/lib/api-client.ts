@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
+import { notifyMobile } from "./notifications";
 
 export class MobileApiError extends Error {
   status: number;
@@ -96,185 +97,138 @@ export async function clearAuthTokens() {
   await storageDelete(REFRESH_KEY);
 }
 
-let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshInFlight: Promise<string> | null = null;
 
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
+function getFallbackBaseUrl(): string | null {
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (!hostUri) return null;
+  const ip = hostUri.split(":")[0];
+  const fallback = `http://${ip}:3000`;
+  return fallback.replace(/\/$/, "") !== getApiBaseUrl().replace(/\/$/, "") ? fallback : null;
+}
+
+async function fetchWithFallback(endpoint: string, options: RequestInit): Promise<Response> {
+  const primary = getApiBaseUrl().replace(/\/$/, "");
+  try {
+    return await fetch(`${primary}${endpoint}`, options);
+  } catch (primaryError) {
+    const fallback = getFallbackBaseUrl();
+    if (!fallback) throw primaryError;
+    try {
+      return await fetch(`${fallback}${endpoint}`, options);
+    } catch {
+      throw primaryError;
+    }
+  }
+}
+
+async function fetchWithNotification(endpoint: string, options: RequestInit): Promise<Response> {
+  try {
+    return await fetchWithFallback(endpoint, options);
+  } catch (error) {
+    notifyMobile("error", error instanceof Error ? error.message : "Check your connection and try again.", "Connection failed");
+    throw error;
+  }
 }
 
 async function executeTokenRefresh(): Promise<string> {
   const refreshToken = await getRefreshToken();
-  if (!refreshToken) {
-    throw new Error("No refresh token stored.");
-  }
+  if (!refreshToken) throw new Error("No refresh token stored.");
 
-  const primaryBaseUrl = getApiBaseUrl();
-  const response = await fetch(`${primaryBaseUrl}/api/auth/refresh`, {
+  const response = await fetchWithFallback("/api/auth/refresh", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ refreshToken }),
   });
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    if (errorBody.code === "SESSION_SUPERSEDED") {
+    if (errorBody.code === "SESSION_SUPERSEDED" || errorBody.code === "SESSION_TERMINATED") {
       await clearAuthTokens();
-      Alert.alert(
-        "Session Terminated",
-        "Your account was logged into from another device (e.g. Web Dashboard). Please sign in again."
-      );
-      if (onSessionSupersededCallback) {
-        onSessionSupersededCallback();
+      if (errorBody.code === "SESSION_SUPERSEDED") {
+        notifyMobile("warning", "Your account was logged into from another device. Please sign in again.", "Session terminated");
       }
-    } else if (errorBody.code === "SESSION_TERMINATED") {
-      await clearAuthTokens();
-      if (onSessionSupersededCallback) {
-        onSessionSupersededCallback();
-      }
+      onSessionSupersededCallback?.();
     }
-    throw new Error("Refresh failed");
+    const message = errorBody.message || "Session refresh failed. Please sign in again.";
+    notifyMobile("error", message, "Session refresh failed");
+    throw new Error(message);
   }
 
   const data = await response.json();
-  if (data.token) {
-    await setAuthTokens(data.token, data.refreshToken || refreshToken);
-    return data.token;
-  }
-
-  throw new Error("Invalid token refresh payload.");
+  if (!data.token) throw new Error("Invalid token refresh payload.");
+  await setAuthTokens(data.token, data.refreshToken || refreshToken);
+  return data.token;
 }
 
-export async function mobileApiClient<T = unknown>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = await getAuthToken();
-  const primaryBaseUrl = getApiBaseUrl();
+async function getFreshToken(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = executeTokenRefresh().finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
 
+/**
+ * Authenticated raw-response helper for multipart uploads and receipt downloads.
+ * It shares the API URL fallback and token-refresh behavior with JSON requests,
+ * without setting Content-Type (the runtime must set multipart boundaries itself).
+ */
+export async function mobileApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response = await fetchWithNotification(endpoint, { ...options, headers });
+  if (response.status === 401 && !endpoint.includes("/api/auth/login") && !endpoint.includes("/api/auth/refresh")) {
+    const errorBody = await response.clone().json().catch(() => ({}));
+    if (errorBody.code === "SESSION_SUPERSEDED" || errorBody.code === "SESSION_TERMINATED") {
+      await clearAuthTokens();
+      if (errorBody.code === "SESSION_SUPERSEDED") {
+        notifyMobile("warning", "Your account was logged in from another device. Please sign in again.", "Session terminated");
+      }
+      onSessionSupersededCallback?.();
+      throw new MobileApiError(errorBody.message || "Session ended. Please sign in again.", 401, errorBody);
+    }
+
+    try {
+      const newToken = await getFreshToken();
+      response = await fetchWithNotification(endpoint, {
+        ...options,
+        headers: { ...headers, Authorization: `Bearer ${newToken}` },
+      });
+    } catch (error) {
+      await clearAuthTokens();
+      onSessionSupersededCallback?.();
+      const message = error instanceof Error ? error.message : "Session expired. Please sign in again.";
+      notifyMobile("error", message, "Session expired");
+      throw new MobileApiError(message, 401);
+    }
+  }
+
+  if (!response.ok) {
+    const errorText = await response.clone().text();
+    let parsed: any;
+    try { parsed = JSON.parse(errorText); } catch { /* non-JSON response */ }
+    const validationMessage = parsed?.errors ? Object.values(parsed.errors).flat().join(" ") : "";
+    const message = validationMessage || parsed?.message || parsed?.detail || parsed?.title || errorText || `HTTP ${response.status}`;
+    notifyMobile(parsed?.errors ? "validation" : "error", message);
+    throw new MobileApiError(message, response.status, parsed);
+  }
+  return response;
+}
+
+export async function mobileApiClient<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
     ...(options.headers as Record<string, string>),
   };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const executeFetch = async (baseUrl: string, customHeaders = headers) => {
-    const url = `${baseUrl}${endpoint}`;
-    return await fetch(url, {
-      ...options,
-      headers: customHeaders,
-    });
-  };
-
-  let response: Response;
-  try {
-    response = await executeFetch(primaryBaseUrl);
-  } catch (primaryErr) {
-    // Port 3000 fallback gateway if 5207 direct LAN connection is blocked
-    const hostUri = Constants.expoConfig?.hostUri;
-    const ip = hostUri ? hostUri.split(":")[0] : "localhost";
-    const fallbackBaseUrl = `http://${ip}:3000`;
-    if (fallbackBaseUrl !== primaryBaseUrl) {
-      try {
-        response = await executeFetch(fallbackBaseUrl);
-      } catch {
-        throw primaryErr;
-      }
-    } else {
-      throw primaryErr;
-    }
-  }
-
-  if (response.status === 401) {
-    const errorBody = await response.clone().json().catch(() => ({}));
-
-    // Force Logout Detection on Mobile (another device took over):
-    if (errorBody.code === "SESSION_SUPERSEDED") {
-      await clearAuthTokens();
-      Alert.alert(
-        "Session Terminated",
-        "Your account was logged in from another device. To protect your studio data, this mobile session was ended."
-      );
-      if (onSessionSupersededCallback) {
-        onSessionSupersededCallback();
-      }
-      throw new Error("Session superseded");
-    }
-
-    // Normal session termination (Logged out from another tab / admin revocation):
-    if (errorBody.code === "SESSION_TERMINATED") {
-      await clearAuthTokens();
-      if (onSessionSupersededCallback) {
-        onSessionSupersededCallback();
-      }
-      throw new Error("Session terminated");
-    }
-
-    // Refresh Mutex for normal token expiration
-    if (!endpoint.includes("/api/auth/login") && !endpoint.includes("/api/auth/refresh")) {
-      if (!isRefreshing) {
-        isRefreshing = true;
-        try {
-          const newToken = await executeTokenRefresh();
-          onTokenRefreshed(newToken);
-          const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
-          const retryResponse = await executeFetch(primaryBaseUrl, retryHeaders);
-          if (!retryResponse.ok) {
-            throw new Error(`HTTP ${retryResponse.status}`);
-          }
-          if (retryResponse.status === 204) return {} as T;
-          return retryResponse.json();
-        } catch {
-          await clearAuthTokens();
-          if (onSessionSupersededCallback) {
-            onSessionSupersededCallback();
-          }
-          throw new Error("Session expired. Please sign in again.");
-        } finally {
-          isRefreshing = false;
-        }
-      }
-
-      return new Promise<T>((resolve, reject) => {
-        refreshSubscribers.push(async (newToken: string) => {
-          try {
-            const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
-            const retryResponse = await executeFetch(primaryBaseUrl, retryHeaders);
-            if (!retryResponse.ok) {
-              reject(new Error(`HTTP ${retryResponse.status}`));
-            } else if (retryResponse.status === 204) {
-              resolve({} as T);
-            } else {
-              resolve(await retryResponse.json());
-            }
-          } catch (err) {
-            reject(err);
-          }
-        });
-      });
-    }
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    let parsed: any;
-    try {
-      parsed = JSON.parse(errorText);
-    } catch {
-      // not JSON
-    }
-    const message = parsed?.message || parsed?.detail || errorText || `HTTP ${response.status}`;
-    throw new MobileApiError(message, response.status, parsed);
-  }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return response.json();
+  const response = await mobileApiFetch(endpoint, { ...options, headers });
+  if (response.status === 204) return {} as T;
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) return {} as T;
+  return await response.json() as T;
 }

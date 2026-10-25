@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Navarachna Studio",
-    "slug": "navarachna-studio",
+    "slug": "navarachna-designer-studio",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,12 +24,27 @@
       "expo-router",
       "expo-secure-store",
       "expo-status-bar",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Navarachna Studio to take receipt photos.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "scheme": "navarachna",
     "web": {
       "bundler": "metro",
       "output": "single"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2b1b9610-694f-4bf9-a16e-3e800acec8ce"
+      }
+    },
+    "owner": "mobiletester2026s-team"
   }
 }

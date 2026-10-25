@@ -1,8 +1,8 @@
 import { Platform } from "react-native";
 
 export const HEADER_BAR_HEIGHT = 56; // Clean atmospheric ambient wash header height
-export const BAR_BASE_HEIGHT = 52; // Low-profile curved nav bar base height with labels
-export const BUBBLE_SIZE = 48; // Floating circular button diameter with generous padding
+export const BAR_BASE_HEIGHT = 48; // Shared bottom navigation height
+export const BUBBLE_SIZE = 48; // Kept for the legacy curved bar implementation
 export const FAB_SIZE = 44; // Action button diameter
 export const FAB_ELEVATION_OFFSET = 12; // Snug elevation in the scoop
 

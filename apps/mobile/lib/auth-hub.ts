@@ -1,6 +1,6 @@
 import * as signalR from "@microsoft/signalr";
 import { getAuthToken, clearAuthTokens, getApiBaseUrl } from "./api-client";
-import { Alert } from "react-native";
+import { notifyMobile } from "./notifications";
 
 let connection: signalR.HubConnection | null = null;
 
@@ -36,9 +36,10 @@ export function initMobileAuthHub(
 
       newConnection.on("SessionSuperseded", async () => {
         await clearAuthTokens();
-        Alert.alert(
-          "Session Terminated",
-          "Your account was logged in from another device. To protect your studio data, this mobile session was ended."
+        notifyMobile(
+          "warning",
+          "Your account was logged in from another device. To protect your studio data, this mobile session was ended.",
+          "Session terminated"
         );
         onSuperseded();
       });

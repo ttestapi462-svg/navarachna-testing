@@ -6,6 +6,7 @@ public class ExpenseForm
     public DateOnly? ExpenseDate { get; set; }
     public decimal? Amount { get; set; }
     public string? CategoryNotes { get; set; }
+    public List<int> SourcingSpecialistIds { get; set; } = [];
     public IFormFile? Bill { get; set; }
 }
 
@@ -23,10 +24,13 @@ public record ExpenseResponse(
     DateOnly ExpenseDate,
     decimal Amount,
     string CategoryNotes,
+    IReadOnlyList<SourcingSpecialistResponse> SourcingSpecialists,
     string BillFileName,
     string BillUrl,
     long? CreatedBy,
     DateTime CreatedAt,
     DateTime? UpdatedAt);
+
+public record SourcingSpecialistResponse(int Id, string FirstName, string? LastName, string DisplayName);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);

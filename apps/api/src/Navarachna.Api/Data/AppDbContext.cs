@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<UserToken> UserTokens => Set<UserToken>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Employee> Employees => Set<Employee>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -114,6 +115,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.ExpenseDate).HasColumnName("expense_date");
             entity.Property(e => e.Amount).HasColumnName("amount").HasPrecision(12, 2);
             entity.Property(e => e.CategoryNotes).HasColumnName("category_notes").HasMaxLength(250).IsRequired();
+            entity.Property(e => e.SourcingSpecialistIds)
+                .HasColumnName("sourcing_specialist_ids")
+                .HasColumnType("integer[]")
+                .HasDefaultValueSql("ARRAY[]::integer[]")
+                .IsRequired();
             entity.Property(e => e.BillBlobName).HasColumnName("bill_blob_name").HasMaxLength(300).IsRequired();
             entity.Property(e => e.BillFileName).HasColumnName("bill_file_name").HasMaxLength(255).IsRequired();
             entity.Property(e => e.BillContentType).HasColumnName("bill_content_type").HasMaxLength(100).IsRequired();
@@ -137,5 +143,16 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.ExpenseDate).HasDatabaseName("idx_tbl_expenses_date");
             entity.HasIndex(e => e.CreatedBy).HasDatabaseName("idx_tbl_expenses_created_by");
         });
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.ToTable("Employees");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("Id").ValueGeneratedOnAdd();
+            entity.Property(e => e.FirstName).HasColumnName("FirstName");
+            entity.Property(e => e.LastName).HasColumnName("LastName");
+            entity.Property(e => e.IsActive).HasColumnName("IsActive");
+        });
+
+
     }
 }

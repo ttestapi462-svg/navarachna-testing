@@ -21,15 +21,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/context/dashboard-auth-context";
+import { useHeaderAction } from "@/context/header-action-context";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { LogoutConfirmationDialog } from "./logout-confirmation-dialog";
 
 export function DashboardHeader() {
   const { user } = useAuth();
+  const { mobileAction } = useHeaderAction();
   const pathname = usePathname();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const pageTitle = pathname === "/expenses"
-    ? "Expenses"
+    ? "Expense management"
     : pathname === "/"
       ? "Dashboard"
       : pathname.split("/").filter(Boolean).pop()?.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Dashboard";
@@ -54,8 +56,15 @@ export function DashboardHeader() {
         </Breadcrumb>
       </div>
 
-      {/* 2. Right: Authenticated User Profile */}
-      <div className="flex items-center gap-3">
+      {/* 2. Right: Mobile action slot + Authenticated User Profile */}
+      <div className="flex items-center gap-2">
+        {/* Mobile-only injected action (e.g. Add button on expenses page) */}
+        {mobileAction ? (
+          <div className="md:hidden">
+            {mobileAction}
+          </div>
+        ) : null}
+
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

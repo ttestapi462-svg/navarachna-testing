@@ -8,6 +8,11 @@ import { OrdersVirtualTable } from "@/components/dashboard/orders-virtual-table"
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
+      <header className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Studio overview</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">A clear view of your atelier activity and account security.</p>
+      </header>
       {/* 1. Top KPI Summary */}
       <KpiCards />
 

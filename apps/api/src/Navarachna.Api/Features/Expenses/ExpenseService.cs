@@ -9,21 +9,54 @@ public class ExpenseService(
     IBillStorage storage,
     ILogger<ExpenseService> log)
 {
+    public async Task<IReadOnlyList<SourcingSpecialistResponse>> GetActiveSourcingSpecialistsAsync(CancellationToken ct)
+    {
+        return await db.Employees.AsNoTracking()
+            .Where(employee => employee.IsActive)
+            .OrderBy(employee => employee.FirstName)
+            .ThenBy(employee => employee.LastName)
+            .Select(employee => new SourcingSpecialistResponse(
+                employee.Id,
+                employee.FirstName,
+                employee.LastName,
+                (employee.FirstName + " " + (employee.LastName ?? "")).Trim()))
+            .ToListAsync(ct);
+    }
+
+    public async Task<Dictionary<string, string[]>> ValidateSourcingSpecialistsAsync(
+        IReadOnlyCollection<int> ids,
+        CancellationToken ct)
+    {
+        if (ids.Count == 0)
+            return new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Select at least one Sourcing Specialist."] };
+
+        var uniqueIds = ids.Distinct().ToArray();
+        var activeCount = await db.Employees.CountAsync(
+            employee => employee.IsActive && uniqueIds.Contains(employee.Id), ct);
+        return activeCount == uniqueIds.Length
+            ? new Dictionary<string, string[]>()
+            : new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Choose only active Sourcing Specialists."] };
+    }
+
     public async Task<ExpenseResponse> CreateAsync(
         ExpenseForm f,
         long? userId,
         CancellationToken ct)
     {
+        var employees = await db.Employees
+            .Where(employee => f.SourcingSpecialistIds.Distinct().Contains(employee.Id))
+            .ToDictionaryAsync(employee => employee.Id, ct);
         var bill = await storage.UploadAsync(f.Bill!, ct);
 
         var expense = new Expense
         {
             ExpenseDate = f.ExpenseDate!.Value,
             Amount = f.Amount!.Value,
-            CategoryNotes = f.CategoryNotes!.Trim(),
+            CategoryNotes = f.CategoryNotes?.Trim() ?? string.Empty,
             BillBlobName = bill.BlobName,
             BillFileName = bill.FileName,
             BillContentType = bill.ContentType,
+            SourcingSpecialistIds = f.SourcingSpecialistIds.Distinct().ToArray(),
             CreatedBy = userId
             // CreatedAt is set by AppDbContext.SaveChangesAsync
         };
@@ -39,7 +72,7 @@ public class ExpenseService(
             throw;
         }
 
-        return ToResponse(expense);
+        return ToResponse(expense, ToSpecialistMap(employees));
     }
 
     public async Task<PagedResult<ExpenseResponse>> ListAsync(
@@ -70,8 +103,11 @@ public class ExpenseService(
             .Take(q.PageSize)
             .ToListAsync(ct);
 
+        var specialists = await LoadSourcingSpecialistsAsync(
+            items.SelectMany(expense => expense.SourcingSpecialistIds), ct);
+
         return new PagedResult<ExpenseResponse>(
-            items.Select(ToResponse).ToList(),
+            items.Select(expense => ToResponse(expense, specialists)).ToList(),
             q.Page,
             q.PageSize,
             total);
@@ -85,7 +121,11 @@ public class ExpenseService(
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
-        return e is null ? null : ToResponse(e);
+        if (e is null)
+            return null;
+
+        var specialists = await LoadSourcingSpecialistsAsync(e.SourcingSpecialistIds, ct);
+        return ToResponse(e, specialists);
     }
 
     public async Task<ExpenseResponse?> UpdateAsync(
@@ -99,6 +139,10 @@ public class ExpenseService(
 
         if (e is null)
             return null;
+
+        var employees = await db.Employees
+            .Where(employee => f.SourcingSpecialistIds.Distinct().Contains(employee.Id))
+            .ToDictionaryAsync(employee => employee.Id, ct);
 
         string? oldBlob = null;
         string? newBlob = null;
@@ -117,7 +161,8 @@ public class ExpenseService(
 
         e.ExpenseDate = f.ExpenseDate!.Value;
         e.Amount = f.Amount!.Value;
-        e.CategoryNotes = f.CategoryNotes!.Trim();
+        e.CategoryNotes = f.CategoryNotes?.Trim() ?? string.Empty;
+        e.SourcingSpecialistIds = f.SourcingSpecialistIds.Distinct().ToArray();
         e.UpdatedBy = userId;
 
         // UpdatedAt is set by AppDbContext.SaveChangesAsync
@@ -137,7 +182,7 @@ public class ExpenseService(
         if (oldBlob is not null)
             await TryDeleteBlobAsync(oldBlob);
 
-        return ToResponse(e);
+        return ToResponse(e, ToSpecialistMap(employees));
     }
 
     /// <summary>
@@ -211,11 +256,42 @@ public class ExpenseService(
         }
     }
 
-    private static ExpenseResponse ToResponse(Expense e) => new(
+    private async Task<Dictionary<int, SourcingSpecialistResponse>> LoadSourcingSpecialistsAsync(
+        IEnumerable<int> ids,
+        CancellationToken ct)
+    {
+        var uniqueIds = ids.Distinct().ToArray();
+        if (uniqueIds.Length == 0)
+            return [];
+
+        var employees = await db.Employees.AsNoTracking()
+            .Where(employee => uniqueIds.Contains(employee.Id))
+            .ToDictionaryAsync(employee => employee.Id, ct);
+        return ToSpecialistMap(employees);
+    }
+
+    private static Dictionary<int, SourcingSpecialistResponse> ToSpecialistMap(
+        IReadOnlyDictionary<int, Employee> employees) => employees
+        .ToDictionary(pair => pair.Key, pair => ToSpecialistResponse(pair.Value));
+
+    private static SourcingSpecialistResponse ToSpecialistResponse(Employee employee) => new(
+        employee.Id,
+        employee.FirstName,
+        employee.LastName,
+        (employee.FirstName + " " + (employee.LastName ?? "")).Trim());
+
+    private static ExpenseResponse ToResponse(
+        Expense e,
+        IReadOnlyDictionary<int, SourcingSpecialistResponse> specialists) => new(
         e.Id,
         e.ExpenseDate,
         e.Amount,
         e.CategoryNotes,
+        e.SourcingSpecialistIds
+            .Where(specialists.ContainsKey)
+            .Select(id => specialists[id])
+            .OrderBy(employee => employee.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList(),
         e.BillFileName,
         $"/api/expenses/{e.Id}/bill",
         e.CreatedBy,

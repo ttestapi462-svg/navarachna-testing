@@ -9,7 +9,7 @@ import { Palette, ShoppingBag, Users, TrendingUp } from "lucide-react";
 export function KpiCards() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <Card className="rounded-4xl border border-border/70 shadow-sm">
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Active Couture Designs
@@ -26,7 +26,7 @@ export function KpiCards() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-4xl border border-border/70 shadow-sm">
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Orders in Atelier
@@ -43,7 +43,7 @@ export function KpiCards() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-4xl border border-border/70 shadow-sm">
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Studio VIP Clients
@@ -58,7 +58,7 @@ export function KpiCards() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-4xl border border-border/70 shadow-sm">
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Monthly Couture Revenue

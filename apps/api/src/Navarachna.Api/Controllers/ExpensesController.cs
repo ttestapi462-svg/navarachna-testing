@@ -20,6 +20,11 @@ public class ExpensesController(ExpenseService service) : ControllerBase
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
     /// <summary>Create an expense.</summary>
+    [HttpGet("sourcing-specialists")]
+    [ProducesResponseType(typeof(IReadOnlyList<SourcingSpecialistResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSourcingSpecialists(CancellationToken ct) =>
+        Ok(await service.GetActiveSourcingSpecialistsAsync(ct));
+
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
@@ -27,6 +32,8 @@ public class ExpensesController(ExpenseService service) : ControllerBase
     public async Task<IActionResult> Create([FromForm] ExpenseForm form, CancellationToken ct)
     {
         var errors = await ExpenseValidator.ValidateFormAsync(form, billRequired: true);
+        foreach (var (key, messages) in await service.ValidateSourcingSpecialistsAsync(form.SourcingSpecialistIds, ct))
+            errors[key] = messages;
         if (errors.Count > 0) return ValidationProblem(new ValidationProblemDetails(errors));
 
         var created = await service.CreateAsync(form, CurrentUserId, ct);
@@ -71,6 +78,8 @@ public class ExpensesController(ExpenseService service) : ControllerBase
     public async Task<IActionResult> Update(long id, [FromForm] ExpenseForm form, CancellationToken ct)
     {
         var errors = await ExpenseValidator.ValidateFormAsync(form, billRequired: false);
+        foreach (var (key, messages) in await service.ValidateSourcingSpecialistsAsync(form.SourcingSpecialistIds, ct))
+            errors[key] = messages;
         if (errors.Count > 0) return ValidationProblem(new ValidationProblemDetails(errors));
 
         var updated = await service.UpdateAsync(id, form, CurrentUserId, ct);

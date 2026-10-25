@@ -47,8 +47,13 @@ public static class ExpenseValidator
 
         // Category / notes (single field, max 250 characters)
         var text = f.CategoryNotes?.Trim();
-        if (string.IsNullOrWhiteSpace(text)) Add("categoryNotes", "Category/notes is required.");
-        else if (text.Length is < 2 or > 250) Add("categoryNotes", "Category/notes must be 2 to 250 characters.");
+        if (!string.IsNullOrEmpty(text) && text.Length is < 2 or > 250)
+            Add("categoryNotes", "Category/notes must be 2 to 250 characters.");
+
+        if (f.SourcingSpecialistIds is null || f.SourcingSpecialistIds.Count == 0)
+            Add("sourcingSpecialistIds", "Select at least one Sourcing Specialist.");
+        else if (f.SourcingSpecialistIds.Any(id => id <= 0))
+            Add("sourcingSpecialistIds", "Sourcing Specialist selection is invalid.");
 
         // Bill photo / copy
         if (f.Bill is null)

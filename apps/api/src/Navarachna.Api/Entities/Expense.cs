@@ -16,6 +16,9 @@ public class Expense : IAuditableEntity
     public string BillFileName { get; set; } = default!;
     public string BillContentType { get; set; } = default!;
 
+    // PostgreSQL integer[] stored directly on tbl_expenses.
+    public int[] SourcingSpecialistIds { get; set; } = [];
+
     // Audit fields (same pattern as User; CreatedAt / UpdatedAt are filled in AppDbContext.SaveChangesAsync)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public long? CreatedBy { get; set; }
