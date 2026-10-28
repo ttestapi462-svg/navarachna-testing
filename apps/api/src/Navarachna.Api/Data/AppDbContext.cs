@@ -150,6 +150,8 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("Id").ValueGeneratedOnAdd();
             entity.Property(e => e.FirstName).HasColumnName("FirstName");
             entity.Property(e => e.LastName).HasColumnName("LastName");
+            entity.Property(e => e.Mobile).HasColumnName("Mobile");
+            entity.Property(e => e.Department).HasColumnName("Department");
             entity.Property(e => e.IsActive).HasColumnName("IsActive");
         });
 

@@ -16,13 +16,40 @@ export class MobileApiError extends Error {
 }
 
 export function getApiBaseUrl(): string {
+  // Environment variables are inlined when Metro starts and may be stale after
+  // switching Wi-Fi or hotspot networks. In development, use Expo's runtime LAN
+  // host when available; an Expo tunnel host is not the backend host.
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (process.env.NODE_ENV === "development") {
+    if (hostUri) {
+      try {
+        const host = new URL(hostUri.includes("://") ? hostUri : `http://${hostUri}`).hostname;
+        const isPrivateIpv4 =
+          /^10\./.test(host) ||
+          /^192\.168\./.test(host) ||
+          /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+        if (isPrivateIpv4) return `http://${host}:5207`;
+      } catch {
+        // Use the current local development address below if hostUri is not an IP.
+      }
+    }
+    return "http://192.168.29.16:5207";
+  }
+
+  const environmentApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (environmentApiUrl) {
+    return environmentApiUrl.replace(/\/$/, "");
+  }
   if (Constants.expoConfig?.extra?.apiUrl) {
     return Constants.expoConfig.extra.apiUrl as string;
   }
-  const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
-    const ip = hostUri.split(":")[0];
-    return `http://${ip}:5207`;
+    try {
+      const host = new URL(hostUri.includes("://") ? hostUri : `http://${hostUri}`).hostname;
+      return `http://${host}:5207`;
+    } catch {
+      // Use localhost only when no usable Expo host is available.
+    }
   }
   return "http://localhost:5207";
 }
@@ -99,34 +126,22 @@ export async function clearAuthTokens() {
 
 let refreshInFlight: Promise<string> | null = null;
 
-function getFallbackBaseUrl(): string | null {
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (!hostUri) return null;
-  const ip = hostUri.split(":")[0];
-  const fallback = `http://${ip}:3000`;
-  return fallback.replace(/\/$/, "") !== getApiBaseUrl().replace(/\/$/, "") ? fallback : null;
-}
-
-async function fetchWithFallback(endpoint: string, options: RequestInit): Promise<Response> {
+async function fetchFromApi(endpoint: string, options: RequestInit): Promise<Response> {
   const primary = getApiBaseUrl().replace(/\/$/, "");
-  try {
-    return await fetch(`${primary}${endpoint}`, options);
-  } catch (primaryError) {
-    const fallback = getFallbackBaseUrl();
-    if (!fallback) throw primaryError;
-    try {
-      return await fetch(`${fallback}${endpoint}`, options);
-    } catch {
-      throw primaryError;
-    }
-  }
+  return fetch(`${primary}${endpoint}`, options);
 }
 
 async function fetchWithNotification(endpoint: string, options: RequestInit): Promise<Response> {
   try {
-    return await fetchWithFallback(endpoint, options);
+    return await fetchFromApi(endpoint, options);
   } catch (error) {
-    notifyMobile("error", error instanceof Error ? error.message : "Check your connection and try again.", "Connection failed");
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    const reason = error instanceof Error ? error.message : "Check your connection and try again.";
+    notifyMobile(
+      "error",
+      `${reason} API: ${getApiBaseUrl()}. Make sure this device can reach the laptop on the same network and port 5207.`,
+      "Connection failed"
+    );
     throw error;
   }
 }
@@ -135,7 +150,7 @@ async function executeTokenRefresh(): Promise<string> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error("No refresh token stored.");
 
-  const response = await fetchWithFallback("/api/auth/refresh", {
+  const response = await fetchFromApi("/api/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ refreshToken }),

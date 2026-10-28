@@ -51,9 +51,9 @@ public static class ExpenseValidator
             Add("categoryNotes", "Category/notes must be 2 to 250 characters.");
 
         if (f.SourcingSpecialistIds is null || f.SourcingSpecialistIds.Count == 0)
-            Add("sourcingSpecialistIds", "Select at least one Sourcing Specialist.");
+            Add("sourcingSpecialistIds", "Select at least one staff member.");
         else if (f.SourcingSpecialistIds.Any(id => id <= 0))
-            Add("sourcingSpecialistIds", "Sourcing Specialist selection is invalid.");
+            Add("sourcingSpecialistIds", "Staff member selection is invalid.");
 
         // Bill photo / copy
         if (f.Bill is null)

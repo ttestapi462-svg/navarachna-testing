@@ -21,7 +21,7 @@ public class ExpensesController(ExpenseService service) : ControllerBase
 
     /// <summary>Create an expense.</summary>
     [HttpGet("sourcing-specialists")]
-    [ProducesResponseType(typeof(IReadOnlyList<SourcingSpecialistResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IReadOnlyList<SourcingSpecialistOptionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSourcingSpecialists(CancellationToken ct) =>
         Ok(await service.GetActiveSourcingSpecialistsAsync(ct));
 

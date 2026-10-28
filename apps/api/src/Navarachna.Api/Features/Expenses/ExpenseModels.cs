@@ -33,4 +33,11 @@ public record ExpenseResponse(
 
 public record SourcingSpecialistResponse(int Id, string FirstName, string? LastName, string DisplayName);
 
+public record SourcingSpecialistOptionResponse(
+    int Id,
+    string FirstName,
+    string? LastName,
+    string DisplayName,
+    string? Mobile);
+
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);

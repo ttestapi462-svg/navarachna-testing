@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Keyboard,
@@ -20,11 +21,13 @@ import {
 } from "react-native";
 import type { ScrollViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "expo-router";
 import {
   AlertCircle,
   ArrowDownToLine,
   CalendarDays,
   Camera,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -34,6 +37,7 @@ import {
   FileText,
   LoaderCircle,
   Pencil,
+  Phone,
   Plus,
   Receipt,
   Search,
@@ -46,11 +50,13 @@ import {
 import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
-import { getTabBarContentPadding } from "../constants/layout";
+import { WebView } from "react-native-webview";
+import { getTabBarContentPadding, getTabBarHeight } from "../constants/layout";
 import { mobileApiFetch, mobileApiClient } from "../lib/api-client";
 import { notifyMobile } from "../lib/notifications";
 import { Card } from "../components/ui/card";
 import { AtelierHeader } from "../components/layout/atelier-header";
+import { createPdfPreviewHtml } from "../lib/pdf-preview";
 
 type Expense = {
   id: number;
@@ -69,6 +75,7 @@ type SourcingSpecialist = {
   firstName: string;
   lastName?: string | null;
   displayName: string;
+  mobile?: string | null;
 };
 
 type ExpensePageResult = {
@@ -115,14 +122,9 @@ function specialistColor(employee: SourcingSpecialist) {
 }
 
 function specialistInitials(employee: SourcingSpecialist) {
-  const first = employee.firstName?.trim().charAt(0) || "";
-  const last = employee.lastName?.trim().split(/\s+/)[0]?.charAt(0) || "";
-  return `${first}${last}`.toUpperCase() || "?";
-}
-
-function expenseNotesPreview(notes?: string) {
-  const value = notes?.trim() || "";
-  return value.length > 32 ? `${value.slice(0, 29).trimEnd()}…` : value;
+  const first = employee.firstName.trim().charAt(0);
+  const last = employee.lastName?.trim().charAt(0) || "";
+  return `${first}${last}`.toUpperCase();
 }
 
 function SpecialistChip({ employee }: { employee: SourcingSpecialist }) {
@@ -132,11 +134,6 @@ function SpecialistChip({ employee }: { employee: SourcingSpecialist }) {
       style={[styles.specialistChip, { backgroundColor: color.background }]}
       accessibilityLabel={employee.displayName}
     >
-      <View style={[styles.specialistAvatar, { backgroundColor: "rgba(255,255,255,0.78)" }]}>
-        <Text style={[styles.specialistInitials, { color: color.foreground }]}>
-          {specialistInitials(employee)}
-        </Text>
-      </View>
       <Text style={[styles.specialistChipText, { color: color.foreground }]} numberOfLines={1}>
         {employee.displayName}
       </Text>
@@ -157,6 +154,8 @@ type ExpenseFieldErrors = {
 };
 
 const PAGE_SIZE = 10;
+const EXPENSE_CARD_GAP = 6;
+const LOAD_MORE_FOOTER_HEIGHT = 64;
 const MAX_BILL_SIZE = 5 * 1024 * 1024;
 const PRIMARY = "#e11d48";
 const TEXT = "#17172B";
@@ -164,7 +163,7 @@ const TEXT_MUTED = "#7B8497";
 const BORDER = "#E9EAF1";
 const SURFACE = "#FFFFFF";
 const BACKGROUND = "#F7F7FB";
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
 function localIsoToday() {
   const now = new Date();
@@ -300,10 +299,11 @@ async function multipartExpenseRequest(
   return response.json();
 }
 
-async function fetchBillResponse(expense: Expense) {
+async function fetchBillResponse(expense: Expense, signal?: AbortSignal) {
   try {
     return await mobileApiFetch(`/api/expenses/${expense.id}/bill`, {
       headers: { Accept: "*/*" },
+      signal,
     });
   } catch (error) {
     if (
@@ -322,21 +322,24 @@ async function fetchBillResponse(expense: Expense) {
 
 export default function ExpenseManagementScreen() {
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const navigation = useNavigation();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const debounceRef = useRef<any>(null);
+  const sourcingSpecialistLoadRef = useRef<Promise<void> | null>(null);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sourcingSpecialists, setSourcingSpecialists] = useState<SourcingSpecialist[]>([]);
   const [specialistsLoading, setSpecialistsLoading] = useState(true);
   const [specialistSearch, setSpecialistSearch] = useState("");
   const [specialistOptionsOpen, setSpecialistOptionsOpen] = useState(false);
+  const [draftSourcingSpecialistIds, setDraftSourcingSpecialistIds] = useState<number[]>([]);
   const formScrollRef = useRef<ScrollViewInstance | null>(null);
   const formViewportHeightRef = useRef(0);
   const formFieldLayoutsRef = useRef<Record<string, { y: number; height: number }>>({});
   const activeFormFieldRef = useRef<string | null>(null);
   const formScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
   const [pageLoading, setPageLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -360,6 +363,11 @@ export default function ExpenseManagementScreen() {
     categoryNotes: "",
     sourcingSpecialistIds: [],
   });
+  const expenseFormBaselineRef = useRef<{
+    values: ExpenseFormValues;
+    billFileName: string;
+  } | null>(null);
+  const discardPromptOpenRef = useRef(false);
   const [selectedBill, setSelectedBill] = useState<SelectedBill | null>(null);
   const [saving, setSaving] = useState(false);
   const [pickingBill, setPickingBill] = useState(false);
@@ -373,8 +381,12 @@ export default function ExpenseManagementScreen() {
 
   const [billLoading, setBillLoading] = useState(false);
   const billLoadingRef = useRef(false);
+  const billPreviewRequestRef = useRef<AbortController | null>(null);
   const [billPreviewVisible, setBillPreviewVisible] = useState(false);
   const [billPreviewUrl, setBillPreviewUrl] = useState<string | null>(null);
+  const [billPreviewIsPdf, setBillPreviewIsPdf] = useState(false);
+  const [billPreviewPdfBase64, setBillPreviewPdfBase64] = useState<string | null>(null);
+  const [billPreviewPdfImage, setBillPreviewPdfImage] = useState<string | null>(null);
   const [activeExpense, setActiveExpense] = useState<Expense | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
@@ -395,6 +407,7 @@ export default function ExpenseManagementScreen() {
   }, []);
 
   const loadMoreRef = useRef(false);
+  const userHasStartedScrollingRef = useRef(false);
   const currentPageRef = useRef(1);
 
   // Infinite scroll: load a page and append or replace
@@ -403,6 +416,7 @@ export default function ExpenseManagementScreen() {
       if (refresh) setRefreshing(true);
       else setPageLoading(true);
 
+      userHasStartedScrollingRef.current = false;
       currentPageRef.current = 1;
 
       const query = new URLSearchParams({
@@ -419,7 +433,7 @@ export default function ExpenseManagementScreen() {
         let newItems: Expense[];
         let newTotal: number;
         if (Array.isArray(result)) {
-          newItems = result;
+          newItems = result.slice(0, PAGE_SIZE);
           newTotal = result.length;
         } else {
           newItems = Array.isArray(result.items) ? result.items : [];
@@ -427,7 +441,6 @@ export default function ExpenseManagementScreen() {
         }
         setExpenses(newItems);
         setTotalCount(newTotal);
-        setPage(1);
       } catch (error) {
         setNotice({
           kind: "error",
@@ -452,25 +465,31 @@ export default function ExpenseManagementScreen() {
     void loadExpenses();
   }, [loadExpenses]);
 
-  useEffect(() => {
-    let mounted = true;
-    void mobileApiClient<SourcingSpecialist[]>("/api/expenses/sourcing-specialists")
-      .then((employees) => {
-        if (mounted) setSourcingSpecialists(Array.isArray(employees) ? employees : []);
-      })
-      .catch((error) => {
-        if (mounted) {
-          setNotice({
-            kind: "error",
-            message: error instanceof Error ? error.message : "Unable to load active Sourcing Specialists.",
-          });
-        }
-      })
-      .finally(() => {
-        if (mounted) setSpecialistsLoading(false);
-      });
-    return () => { mounted = false; };
+  const loadSourcingSpecialists = useCallback(() => {
+    if (sourcingSpecialistLoadRef.current) return sourcingSpecialistLoadRef.current;
+
+    setSpecialistsLoading(true);
+    const request = (async () => {
+      try {
+        const employees = await mobileApiClient<SourcingSpecialist[]>("/api/expenses/sourcing-specialists");
+        setSourcingSpecialists(Array.isArray(employees) ? employees : []);
+      } catch (error) {
+        setNotice({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Unable to load staff members.",
+        });
+      } finally {
+        setSpecialistsLoading(false);
+        sourcingSpecialistLoadRef.current = null;
+      }
+    })();
+    sourcingSpecialistLoadRef.current = request;
+    return request;
   }, []);
+
+  useEffect(() => {
+    void loadSourcingSpecialists();
+  }, [loadSourcingSpecialists]);
 
   useEffect(() => {
     const keyboardSubscription = Keyboard.addListener("keyboardDidShow", () => {
@@ -522,7 +541,7 @@ export default function ExpenseManagementScreen() {
       let newItems: Expense[];
       let newTotal: number;
       if (Array.isArray(result)) {
-        newItems = result;
+        newItems = result.slice((nextPage - 1) * PAGE_SIZE, nextPage * PAGE_SIZE);
         newTotal = result.length;
       } else {
         newItems = Array.isArray(result.items) ? result.items : [];
@@ -535,7 +554,6 @@ export default function ExpenseManagementScreen() {
       });
       setTotalCount(newTotal);
       currentPageRef.current = nextPage;
-      setPage(nextPage);
     } catch (err) {
       console.warn("Failed to load more expenses", err);
     } finally {
@@ -546,6 +564,20 @@ export default function ExpenseManagementScreen() {
 
   const hasFilters = Boolean(search || fromDate || toDate);
   const hasDateFilter = Boolean(fromDate && toDate);
+  const calendarDaySize = Math.max(29, Math.min(34, Math.floor((windowWidth - 112) / 7)));
+  const dateSheetMaxHeight = Math.min(windowHeight * 0.78, 620);
+  const expenseCardHeight = listViewportHeight > 0
+    ? Math.max(
+        78,
+        Math.floor((listViewportHeight - getTabBarHeight(insets.bottom) - 30) / 6)
+      )
+    : undefined;
+  const expenseListBottomPadding = expenseCardHeight
+    ? Math.max(
+        getTabBarHeight(insets.bottom),
+        listViewportHeight - (6 * expenseCardHeight + 5 * EXPENSE_CARD_GAP)
+      )
+    : getTabBarContentPadding(insets.bottom) + 13;
   const filteredSourcingSpecialists = useMemo(() => {
     const term = specialistSearch.trim().toLowerCase();
     return sourcingSpecialists.filter((employee) =>
@@ -563,6 +595,15 @@ export default function ExpenseManagementScreen() {
     }));
     clearFieldError("sourcingSpecialistIds");
     setFormError("");
+  };
+
+  const toggleDraftSourcingSpecialist = (employeeId: number) => {
+    Keyboard.dismiss();
+    setDraftSourcingSpecialistIds((current) =>
+      current.includes(employeeId)
+        ? current.filter((id) => id !== employeeId)
+        : [...current, employeeId]
+    );
   };
 
   const calendarCells = useMemo(() => {
@@ -589,16 +630,111 @@ export default function ExpenseManagementScreen() {
     });
   };
 
+  const isExpenseFormDirty = useCallback(() => {
+    const baseline = expenseFormBaselineRef.current;
+    if (!baseline) return false;
+    return (
+      JSON.stringify(formValues) !== JSON.stringify(baseline.values) ||
+      Boolean(selectedBill) ||
+      (editing?.billFileName || "") !== baseline.billFileName
+    );
+  }, [editing?.billFileName, formValues, selectedBill]);
+
+  const dismissExpenseForm = useCallback(() => {
+    expenseFormBaselineRef.current = null;
+    setFormVisible(false);
+    setDatePickerVisible(false);
+    setSpecialistOptionsOpen(false);
+    setSpecialistSearch("");
+    Keyboard.dismiss();
+  }, []);
+
+  const requestCloseExpenseForm = useCallback(() => {
+    if (saving) return;
+    if (!isExpenseFormDirty()) {
+      dismissExpenseForm();
+      return;
+    }
+    if (discardPromptOpenRef.current) return;
+    discardPromptOpenRef.current = true;
+    Alert.alert(
+      "Discard changes?",
+      "Your unsaved expense changes will be lost.",
+      [
+        {
+          text: "Keep Editing",
+          style: "cancel",
+          onPress: () => { discardPromptOpenRef.current = false; },
+        },
+        {
+          text: "Discard Changes",
+          style: "destructive",
+          onPress: () => {
+            discardPromptOpenRef.current = false;
+            dismissExpenseForm();
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => { discardPromptOpenRef.current = false; } }
+    );
+  }, [dismissExpenseForm, isExpenseFormDirty, saving]);
+
+  const removalGuardNavigation = useMemo(
+    () => navigation as unknown as {
+      addListener: (
+        eventName: "beforeRemove",
+        listener: (event: {
+          preventDefault: () => void;
+          data?: { action?: unknown };
+        }) => void
+      ) => () => void;
+      dispatch: (action: never) => void;
+    },
+    [navigation]
+  );
+
+  useEffect(() => removalGuardNavigation.addListener("beforeRemove", (event) => {
+    if (!formVisible || !isExpenseFormDirty() || saving) return;
+    event.preventDefault();
+    if (discardPromptOpenRef.current) return;
+    discardPromptOpenRef.current = true;
+    Alert.alert(
+      "Discard changes?",
+      "Your unsaved expense changes will be lost.",
+      [
+        {
+          text: "Keep Editing",
+          style: "cancel",
+          onPress: () => { discardPromptOpenRef.current = false; },
+        },
+        {
+          text: "Discard Changes",
+          style: "destructive",
+          onPress: () => {
+            discardPromptOpenRef.current = false;
+            dismissExpenseForm();
+            if (event.data?.action) {
+              removalGuardNavigation.dispatch(event.data.action as never);
+            }
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => { discardPromptOpenRef.current = false; } }
+    );
+  }), [dismissExpenseForm, formVisible, isExpenseFormDirty, removalGuardNavigation, saving]);
+
   const newExpense = () => {
     Keyboard.dismiss();
     setEditing(null);
     setDatePickerVisible(false);
-    setFormValues({
+    const initialValues: ExpenseFormValues = {
       expenseDate: localIsoToday(),
       amount: "",
       categoryNotes: "",
       sourcingSpecialistIds: [],
-    });
+    };
+    expenseFormBaselineRef.current = { values: initialValues, billFileName: "" };
+    setFormValues(initialValues);
     setSpecialistSearch("");
     setSpecialistOptionsOpen(false);
     setSelectedBill(null);
@@ -610,12 +746,17 @@ export default function ExpenseManagementScreen() {
   const editExpense = (expense: Expense) => {
     setEditing(expense);
     setDatePickerVisible(false);
-    setFormValues({
+    const initialValues: ExpenseFormValues = {
       expenseDate: expense.expenseDate.slice(0, 10),
       amount: String(expense.amount),
       categoryNotes: expense.categoryNotes,
       sourcingSpecialistIds: (expense.sourcingSpecialists || []).map((employee) => employee.id),
-    });
+    };
+    expenseFormBaselineRef.current = {
+      values: { ...initialValues, sourcingSpecialistIds: [...initialValues.sourcingSpecialistIds] },
+      billFileName: expense.billFileName || "",
+    };
+    setFormValues(initialValues);
     setSpecialistSearch("");
     setSpecialistOptionsOpen(false);
     setSelectedBill(null);
@@ -631,7 +772,6 @@ export default function ExpenseManagementScreen() {
     debounceRef.current = setTimeout(() => {
       setExpenses([]);
       setSearch(text.trim());
-      setPage(1);
     }, 300);
   };
 
@@ -640,7 +780,6 @@ export default function ExpenseManagementScreen() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setExpenses([]);
     setSearch(searchDraft.trim());
-    setPage(1);
   };
 
   const clearSearch = () => {
@@ -649,7 +788,6 @@ export default function ExpenseManagementScreen() {
     setSearchDraft("");
     setExpenses([]);
     setSearch("");
-    setPage(1);
   };
 
   // Pull-to-refresh
@@ -856,8 +994,7 @@ export default function ExpenseManagementScreen() {
     if (Platform.OS === "web") {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept =
-        ".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf";
+      input.accept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
       input.onchange = () => {
         const file = input.files?.[0];
         if (!file) return;
@@ -865,7 +1002,7 @@ export default function ExpenseManagementScreen() {
         if (!ALLOWED_EXTENSIONS.includes(extension)) {
           setNotice({
             kind: "error",
-            message: "Choose a JPG, PNG, WEBP or PDF receipt.",
+            message: "Choose a JPG, PNG, or WEBP image receipt.",
           });
           return;
         }
@@ -893,13 +1030,13 @@ export default function ExpenseManagementScreen() {
     setPickingBill(true);
     try {
       const result = await File.pickFileAsync({
-        mimeTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+        mimeTypes: ["image/jpeg", "image/png", "image/webp"],
       });
       if (result.canceled) return;
       const file = result.result;
       const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
       if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        notifyMobile("validation", "Choose a JPG, PNG, WEBP or PDF receipt.", "Unsupported file");
+        notifyMobile("validation", "Choose a JPG, PNG, or WEBP image receipt.", "Unsupported file");
         return;
       }
       if (file.size !== null && file.size > MAX_BILL_SIZE) {
@@ -956,7 +1093,7 @@ export default function ExpenseManagementScreen() {
     }
 
     if (formValues.sourcingSpecialistIds.length === 0) {
-      newErrors.sourcingSpecialistIds = "Select at least one Sourcing Specialist";
+      newErrors.sourcingSpecialistIds = "Select at least one team member";
     }
 
     if (!editing && !selectedBill) {
@@ -990,7 +1127,7 @@ export default function ExpenseManagementScreen() {
     setSaving(true);
     try {
       await multipartExpenseRequest(editing?.id ?? null, body);
-      setFormVisible(false);
+      dismissExpenseForm();
       setNotice({
         kind: "success",
         message: editing
@@ -998,7 +1135,6 @@ export default function ExpenseManagementScreen() {
           : "Expense added successfully.",
       });
       setExpenses([]);
-      setPage(1);
       setRefreshKey((key) => key + 1);
     } catch (error) {
       setFormError(
@@ -1012,6 +1148,8 @@ export default function ExpenseManagementScreen() {
   // Card tap opens bill preview with Download button inside
   const openBillPreview = async (expense: Expense) => {
     if (billLoadingRef.current) return;
+    const request = new AbortController();
+    billPreviewRequestRef.current = request;
     billLoadingRef.current = true;
     setActiveExpense(expense);
     // Avoid stacking two native Modal windows. On iOS/Expo Go the detail sheet
@@ -1020,42 +1158,87 @@ export default function ExpenseManagementScreen() {
     setBillPreviewVisible(false);
     setBillLoading(true);
     setBillPreviewUrl(null);
+    setBillPreviewPdfBase64(null);
+    setBillPreviewPdfImage(null);
+    setBillPreviewIsPdf(false);
     try {
       if (Platform.OS !== "web") {
         await new Promise((resolve) => setTimeout(resolve, 260));
       }
       setBillPreviewVisible(true);
-      const response = await fetchBillResponse(expense);
+      const response = await fetchBillResponse(expense, request.signal);
+      if (request.signal.aborted) return;
       const filename = filenameFromResponse(
         response,
         expense.billFileName || `expense-${expense.id}-bill`
       );
       const contentType =
         response.headers.get("content-type") || mimeFromName(filename);
+      const isPdf =
+        contentType.toLowerCase().includes("application/pdf") ||
+        filename.toLowerCase().endsWith(".pdf");
+      setBillPreviewIsPdf(isPdf);
       const bytes = await response.arrayBuffer();
+      if (request.signal.aborted) return;
       if (Platform.OS === "web") {
         setBillPreviewUrl(
           URL.createObjectURL(new Blob([bytes], { type: contentType }))
         );
       } else {
-        const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        if (isPdf) {
+          const bytesView = new Uint8Array(bytes);
+          let binary = "";
+          const chunkSize = 0x8000;
+          for (let offset = 0; offset < bytesView.length; offset += chunkSize) {
+            binary += String.fromCharCode(...bytesView.subarray(offset, offset + chunkSize));
+          }
+          setBillPreviewPdfBase64(btoa(binary));
+          return;
+        }
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const safeName =
+          isPdf && !sanitizedFilename.toLowerCase().endsWith(".pdf")
+            ? `${sanitizedFilename}.pdf`
+            : sanitizedFilename;
         const previewFile = new File(
           Paths.cache,
           `${expense.id}-${Date.now()}-${safeName}`
         );
         await previewFile.write(new Uint8Array(bytes));
+        if (request.signal.aborted) return;
         setBillPreviewUrl(previewFile.uri);
       }
     } catch (error) {
-      setNotice({
-        kind: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to load bill preview.",
-      });
+      if (!request.signal.aborted) {
+        setBillPreviewUrl(null);
+        setNotice({
+          kind: "error",
+          message:
+            error instanceof Error ? error.message : "Unable to load bill preview.",
+        });
+      }
     } finally {
-      billLoadingRef.current = false;
-      setBillLoading(false);
+      if (billPreviewRequestRef.current === request) {
+        billPreviewRequestRef.current = null;
+        billLoadingRef.current = false;
+        setBillLoading(false);
+      }
     }
+  };
+
+  const closeBillPreview = () => {
+    billPreviewRequestRef.current?.abort();
+    billPreviewRequestRef.current = null;
+    billLoadingRef.current = false;
+    setBillLoading(false);
+    setBillPreviewVisible(false);
+    if (Platform.OS === "web" && billPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(billPreviewUrl);
+    }
+    setBillPreviewUrl(null);
+    setBillPreviewPdfBase64(null);
+    setBillPreviewPdfImage(null);
+    setBillPreviewIsPdf(false);
   };
 
   const viewBill = async (expense?: Expense) => {
@@ -1272,6 +1455,7 @@ export default function ExpenseManagementScreen() {
       );
       setExpenses((current) => current.filter((item) => item.id !== expense.id));
       setTotalCount((count) => Math.max(0, count - 1));
+      void loadExpenses(true);
       setExpenseToDelete(null);
       // Close detail view if the deleted expense was being viewed
       if (activeExpense?.id === expense.id) {
@@ -1318,7 +1502,6 @@ export default function ExpenseManagementScreen() {
     setExpenses([]);
     setFromDate(fromDraft);
     setToDate(toDraft);
-    setPage(1);
     setFiltersVisible(false);
   };
 
@@ -1329,7 +1512,6 @@ export default function ExpenseManagementScreen() {
     setExpenses([]);
     setFromDate("");
     setToDate("");
-    setPage(1);
     setFiltersVisible(false);
   };
 
@@ -1342,7 +1524,6 @@ export default function ExpenseManagementScreen() {
     setToDraft("");
     setFromDate("");
     setToDate("");
-    setPage(1);
     setFiltersVisible(false);
   };
 
@@ -1352,6 +1533,7 @@ export default function ExpenseManagementScreen() {
     setActiveExpense(expense);
     setDetailVisible(true);
     setBillPreviewUrl(null);
+    setBillPreviewPdfBase64(null);
   };
 
   const hasFormFile = Boolean(selectedBill || (editing && editing.billFileName));
@@ -1371,9 +1553,13 @@ export default function ExpenseManagementScreen() {
       <AtelierHeader
         title="Expense management"
         showProfile={false}
-        compactBrand
         backgroundColor="#F9D2DC"
-        icon={<Receipt size={18} color="#ffffff" strokeWidth={2.4} />}
+        barStyle={styles.expenseHeaderBar}
+        brandContainerStyle={styles.expenseHeaderBrand}
+        preserveTitleSize
+        brandMarkStyle={styles.expenseBrandMark}
+        brandTitleStyle={styles.expenseBrandTitle}
+        icon={<Receipt size={32} color="#BE123C" strokeWidth={2.6} />}
         rightAction={
           <TouchableOpacity
             style={styles.headerAddButton}
@@ -1382,7 +1568,7 @@ export default function ExpenseManagementScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add expense"
           >
-            <Plus size={20} color="#ffffff" strokeWidth={2.5} />
+            <Plus size={19} color="#ffffff" strokeWidth={2.5} />
           </TouchableOpacity>
         }
       />
@@ -1457,17 +1643,23 @@ export default function ExpenseManagementScreen() {
       </View>
 
       {/* 2. PULL-TO-REFRESH & SCROLLABLE EXPENSE LIST with infinite scroll */}
-      <View style={styles.listContainer}>
+      <View
+        style={styles.listContainer}
+        onLayout={(event) => setListViewportHeight(event.nativeEvent.layout.height)}
+      >
         <FlatList
           data={pageLoading ? [] : expenses}
           keyExtractor={(expense) => String(expense.id)}
           renderItem={({ item: expense }) => (
             <TouchableOpacity
-              style={styles.compactCard}
+              style={[
+                styles.compactCard,
+                expenseCardHeight ? { height: expenseCardHeight } : undefined,
+              ]}
               activeOpacity={0.7}
               onPress={() => openExpenseDetail(expense)}
               accessibilityRole="button"
-              accessibilityLabel={`View expense: ${expense.categoryNotes}. Sourcing Specialists: ${(expense.sourcingSpecialists || []).map((employee) => employee.displayName).join(", ")}`}
+              accessibilityLabel={`View expense. Assigned team members: ${(expense.sourcingSpecialists || []).map((employee) => employee.displayName).join(", ")}`}
             >
               <View style={styles.expenseCardContent}>
                 <View style={styles.expenseCardTopRow}>
@@ -1492,29 +1684,17 @@ export default function ExpenseManagementScreen() {
                     )}
                   </View>
                   <View style={styles.expenseSpecialistChips}>
-                    {expense.sourcingSpecialists?.slice(0, 2).map((employee) => (
+                    {expense.sourcingSpecialists?.slice(0, 1).map((employee) => (
                       <SpecialistChip key={employee.id} employee={employee} />
                     ))}
-                    {(expense.sourcingSpecialists?.length || 0) > 2 ? (
+                    {(expense.sourcingSpecialists?.length || 0) > 1 ? (
                       <View style={styles.specialistOverflowChip}>
                         <Text style={styles.specialistOverflowText}>
-                          +{(expense.sourcingSpecialists?.length || 0) - 2}
+                          +{(expense.sourcingSpecialists?.length || 0) - 1}
                         </Text>
                       </View>
                     ) : null}
                   </View>
-                </View>
-                <View style={styles.expenseCardBottomRow}>
-                  <View style={styles.expenseNotesIconSlot}>
-                    <FileText size={14} color={PRIMARY} strokeWidth={2} />
-                  </View>
-                  <Text
-                    style={styles.cardTitleText}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {expenseNotesPreview(expense.categoryNotes) || " "}
-                  </Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -1564,17 +1744,36 @@ export default function ExpenseManagementScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: getTabBarContentPadding(insets.bottom) + 13 },
+            { paddingBottom: expenseListBottomPadding },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          onScrollBeginDrag={() => Keyboard.dismiss()}
+          onScrollBeginDrag={() => {
+            userHasStartedScrollingRef.current = true;
+            Keyboard.dismiss();
+          }}
+          onScroll={(event) => {
+            if (!userHasStartedScrollingRef.current) return;
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            const distanceFromEnd =
+              contentSize.height - layoutMeasurement.height - contentOffset.y;
+            if (distanceFromEnd <= Math.max(110, (expenseCardHeight || 78) + EXPENSE_CARD_GAP)) {
+              void loadMore();
+            }
+          }}
+          scrollEventThrottle={16}
           refreshing={refreshing}
           onRefresh={() => void handleRefresh()}
           progressViewOffset={8}
-          onEndReached={() => void loadMore()}
-          onEndReachedThreshold={0.8}
+          onEndReached={() => {
+            if (userHasStartedScrollingRef.current) void loadMore();
+          }}
+          onEndReachedThreshold={0.25}
+          snapToInterval={expenseCardHeight ? expenseCardHeight + EXPENSE_CARD_GAP : undefined}
+          snapToAlignment="start"
+          snapToEnd={false}
+          decelerationRate="fast"
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={7}
@@ -1595,7 +1794,7 @@ export default function ExpenseManagementScreen() {
             style={StyleSheet.absoluteFill}
             onPress={() => setFiltersVisible(false)}
           />
-          <View style={styles.dateSheetCard}>
+          <View style={[styles.dateSheetCard, { maxHeight: dateSheetMaxHeight }]}>
             <View style={styles.sheetHandleRow}>
               <View style={styles.sheetHandle} />
             </View>
@@ -1668,7 +1867,7 @@ export default function ExpenseManagementScreen() {
                 </View>
                 <View style={styles.calendarWeekRow}>
                   {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
-                    <Text key={day} style={styles.calendarWeekday}>
+                    <Text key={day} style={[styles.calendarWeekday, { width: calendarDaySize }]}>
                       {day}
                     </Text>
                   ))}
@@ -1688,6 +1887,7 @@ export default function ExpenseManagementScreen() {
                         activeOpacity={0.7}
                         style={[
                           styles.calendarDay,
+                          { width: calendarDaySize, height: calendarDaySize },
                           day.getMonth() !== calendarMonth.getMonth() &&
                             styles.calendarDayOutside,
                           selected && styles.calendarDaySelected,
@@ -1764,7 +1964,10 @@ export default function ExpenseManagementScreen() {
         transparent
         onRequestClose={() => {
           if (datePickerVisible) setDatePickerVisible(false);
-          else if (!saving) setFormVisible(false);
+          else if (specialistOptionsOpen) {
+            setSpecialistOptionsOpen(false);
+            setSpecialistSearch("");
+          } else requestCloseExpenseForm();
         }}
       >
         <KeyboardAvoidingView
@@ -1773,9 +1976,7 @@ export default function ExpenseManagementScreen() {
         >
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => {
-              if (!saving) setFormVisible(false);
-            }}
+            onPress={requestCloseExpenseForm}
           />
           <View
             style={[
@@ -1800,7 +2001,7 @@ export default function ExpenseManagementScreen() {
               </View>
               <TouchableOpacity
                 style={styles.closeButton}
-                onPress={() => !saving && setFormVisible(false)}
+                onPress={requestCloseExpenseForm}
                 activeOpacity={0.7}
                 accessibilityLabel="Close form"
               >
@@ -1900,7 +2101,7 @@ export default function ExpenseManagementScreen() {
                   value={formValues.amount}
                   onChangeText={(amount) => {
                     setFormValues((old) => ({ ...old, amount }));
-                          centerFormField("amount", 35, false);
+                    centerFormField("amount", 35, false);
                     clearFieldError("amount");
                     setFormError("");
                   }}
@@ -1923,7 +2124,7 @@ export default function ExpenseManagementScreen() {
               ) : null}
 
               <Text style={styles.fieldLabel}>
-                Sourcing Specialist <Text style={styles.requiredStar}>*</Text>
+                Handled by <Text style={styles.requiredStar}>*</Text>
               </Text>
               <View
                 style={styles.sourcingSpecialistPicker}
@@ -1938,24 +2139,21 @@ export default function ExpenseManagementScreen() {
                   style={styles.sourcingSpecialistTrigger}
                   onPress={() => {
                     Keyboard.dismiss();
-                    const nextOpen = !specialistOptionsOpen;
-                    setSpecialistOptionsOpen(nextOpen);
-                    if (nextOpen) {
-                      centerFormField("specialist", 180);
-                    } else {
-                      setSpecialistSearch("");
-                    }
+                    setSpecialistSearch("");
+                    setDraftSourcingSpecialistIds([...formValues.sourcingSpecialistIds]);
+                    void loadSourcingSpecialists();
+                    setSpecialistOptionsOpen(true);
                   }}
                   activeOpacity={0.75}
                   accessibilityRole="button"
-                  accessibilityLabel={`Select Sourcing Specialists. ${formValues.sourcingSpecialistIds.length} selected`}
+                  accessibilityLabel={`Select who handled this expense. ${formValues.sourcingSpecialistIds.length} selected`}
                   accessibilityState={{ expanded: specialistOptionsOpen }}
                 >
                   <Users size={16} color={PRIMARY} />
                   <Text style={styles.sourcingSpecialistTriggerText} numberOfLines={1}>
                     {formValues.sourcingSpecialistIds.length
-                      ? `${formValues.sourcingSpecialistIds.length} selected`
-                      : "Choose one or more employees"}
+                      ? `${formValues.sourcingSpecialistIds.length} staff selected`
+                      : "Choose staff members"}
                   </Text>
                   <ChevronDown size={16} color={TEXT_MUTED} />
                 </TouchableOpacity>
@@ -1977,107 +2175,12 @@ export default function ExpenseManagementScreen() {
                       ))}
                   </View>
                 ) : null}
-                {specialistOptionsOpen ? (
-                  <View style={styles.sourcingSpecialistOptions}>
-                    <View style={styles.sourcingSpecialistSearch}>
-                      <Search size={15} color={TEXT_MUTED} />
-                      <TextInput
-                        value={specialistSearch}
-                        onChangeText={(value) => {
-                          setSpecialistSearch(value);
-                          centerFormField("specialist", 35, false);
-                        }}
-                        placeholder="Search employees"
-                        placeholderTextColor="#9AA3B5"
-                        style={styles.sourcingSpecialistSearchInput}
-                        autoCorrect={false}
-                        returnKeyType="search"
-                        accessibilityLabel="Search Sourcing Specialists"
-                        onFocus={() => centerFormField("specialist", 50)}
-                      />
-                    </View>
-                    <ScrollView
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator
-                      keyboardShouldPersistTaps="always"
-                      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-                      style={[
-                        styles.sourcingSpecialistList,
-                        { maxHeight: Math.min(240, Math.max(120, windowHeight * 0.3)) },
-                      ]}
-                    >
-                      {specialistsLoading ? (
-                        <View style={styles.specialistLoading}>
-                          <ActivityIndicator size="small" color={PRIMARY} />
-                          <Text style={styles.sourcingSpecialistEmpty}>Loading employees…</Text>
-                        </View>
-                      ) : filteredSourcingSpecialists.length ? filteredSourcingSpecialists.map((employee) => {
-                        const selected = formValues.sourcingSpecialistIds.includes(employee.id);
-                        return (
-                          <TouchableOpacity
-                            key={employee.id}
-                            style={styles.sourcingSpecialistOption}
-                            onPress={() => toggleSourcingSpecialist(employee.id)}
-                            accessibilityRole="checkbox"
-                            accessibilityLabel={employee.displayName}
-                            accessibilityHint={selected ? "Remove this specialist" : "Add this specialist"}
-                            accessibilityState={{ checked: selected }}
-                          >
-                            <View style={[styles.sourcingSpecialistCheckbox, selected && styles.sourcingSpecialistCheckboxSelected]}>
-                              {selected ? <CheckCircle2 size={15} color="#ffffff" /> : null}
-                            </View>
-                            <Text style={styles.sourcingSpecialistOptionText}>{employee.displayName}</Text>
-                          </TouchableOpacity>
-                        );
-                      }) : (
-                        <Text style={styles.sourcingSpecialistEmpty}>No active employees found.</Text>
-                      )}
-                    </ScrollView>
-                  </View>
-                ) : null}
+
               </View>
               {fieldErrors.sourcingSpecialistIds ? (
                 <View style={styles.fieldErrorBanner}>
                   <AlertCircle size={13} color="#ef4444" />
                   <Text style={styles.fieldErrorText}>{fieldErrors.sourcingSpecialistIds}</Text>
-                </View>
-              ) : null}
-
-              {/* Category / notes */}
-              <Text style={styles.fieldLabel}>Category / notes (optional)</Text>
-              <TextInput
-                value={formValues.categoryNotes}
-                onLayout={(event) => {
-                  formFieldLayoutsRef.current.notes = {
-                    y: event.nativeEvent.layout.y,
-                    height: event.nativeEvent.layout.height,
-                  };
-                }}
-                onFocus={() => centerFormField("notes")}
-                onChangeText={(categoryNotes) => {
-                  setFormValues((old) => ({ ...old, categoryNotes }));
-                  centerFormField("notes", 35, false);
-                  clearFieldError("categoryNotes");
-                  setFormError("");
-                }}
-                placeholder="e.g. Fabric purchase, 2 Shirts order"
-                placeholderTextColor="#9AA3B5"
-                multiline
-                maxLength={250}
-                textAlignVertical="top"
-                style={[
-                  styles.textInput,
-                  styles.notesInputCompact,
-                  fieldErrors.categoryNotes && styles.inputErrorRow,
-                  fieldErrors.categoryNotes && styles.textInputError,
-                ]}
-              />
-              {fieldErrors.categoryNotes ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>
-                    {fieldErrors.categoryNotes}
-                  </Text>
                 </View>
               ) : null}
 
@@ -2211,6 +2314,44 @@ export default function ExpenseManagementScreen() {
                 </View>
               ) : null}
 
+              {/* Category / notes */}
+              <Text style={styles.fieldLabel}>Category / notes (optional)</Text>
+              <TextInput
+                value={formValues.categoryNotes}
+                onLayout={(event) => {
+                  formFieldLayoutsRef.current.notes = {
+                    y: event.nativeEvent.layout.y,
+                    height: event.nativeEvent.layout.height,
+                  };
+                }}
+                onFocus={() => centerFormField("notes")}
+                onChangeText={(categoryNotes) => {
+                  setFormValues((old) => ({ ...old, categoryNotes }));
+                  centerFormField("notes", 35, false);
+                  clearFieldError("categoryNotes");
+                  setFormError("");
+                }}
+                placeholder="e.g. Fabric purchase, 2 Shirts order"
+                placeholderTextColor="#9AA3B5"
+                multiline
+                maxLength={250}
+                textAlignVertical="top"
+                style={[
+                  styles.textInput,
+                  styles.notesInputCompact,
+                  fieldErrors.categoryNotes && styles.inputErrorRow,
+                  fieldErrors.categoryNotes && styles.textInputError,
+                ]}
+              />
+              {fieldErrors.categoryNotes ? (
+                <View style={styles.fieldErrorBanner}>
+                  <AlertCircle size={13} color="#ef4444" />
+                  <Text style={styles.fieldErrorText}>
+                    {fieldErrors.categoryNotes}
+                  </Text>
+                </View>
+              ) : null}
+
               {formError ? (
                 <View style={styles.formError}>
                   <AlertCircle size={15} color="#be123c" />
@@ -2223,7 +2364,7 @@ export default function ExpenseManagementScreen() {
             <View style={styles.modalButtonsCompact}>
               <TouchableOpacity
                 style={styles.cancelButtonOutlineRed}
-                onPress={() => setFormVisible(false)}
+                onPress={requestCloseExpenseForm}
                 disabled={saving}
                 activeOpacity={0.7}
                 accessibilityRole="button"
@@ -2306,7 +2447,7 @@ export default function ExpenseManagementScreen() {
                 </View>
                 <View style={styles.calendarWeekRow}>
                   {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
-                    <Text key={day} style={styles.calendarWeekday}>
+                    <Text key={day} style={[styles.calendarWeekday, { width: calendarDaySize }]}>
                       {day}
                     </Text>
                   ))}
@@ -2324,6 +2465,7 @@ export default function ExpenseManagementScreen() {
                         activeOpacity={0.7}
                         style={[
                           styles.calendarDay,
+                          { width: calendarDaySize, height: calendarDaySize },
                           !inMonth && styles.calendarDayOutside,
                           selected && styles.calendarDaySelected,
                           disabled && styles.calendarDayDisabled,
@@ -2372,6 +2514,196 @@ export default function ExpenseManagementScreen() {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.applyButtonText}>Today</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : null}
+          {specialistOptionsOpen ? (
+            <View style={[StyleSheet.absoluteFill, styles.handledByOverlay]}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => {
+                  setSpecialistOptionsOpen(false);
+                  setSpecialistSearch("");
+                  Keyboard.dismiss();
+                }}
+                accessibilityLabel="Close handled by selection"
+                accessibilityRole="button"
+              />
+              <View style={[styles.handledBySheetCard, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+                <View style={styles.sheetHandleRow}>
+                  <View style={styles.sheetHandle} />
+                </View>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.modalTitle}>Handled by</Text>
+                    <Text style={styles.handledBySubtitle}>
+                      Select one or more staff members
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => {
+                      setSpecialistOptionsOpen(false);
+                      setSpecialistSearch("");
+                      Keyboard.dismiss();
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close handled by selection"
+                  >
+                    <X size={17} color={TEXT_MUTED} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.handledBySelectedSection}>
+                  <Text style={styles.handledBySectionLabel}>
+                    SELECTED ({draftSourcingSpecialistIds.length})
+                  </Text>
+                  {draftSourcingSpecialistIds.length ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
+                      contentContainerStyle={styles.handledBySelectedChips}
+                    >
+                      {sourcingSpecialists
+                        .filter((employee) => draftSourcingSpecialistIds.includes(employee.id))
+                        .map((employee) => (
+                          <TouchableOpacity
+                            key={employee.id}
+                            style={styles.sourcingSpecialistChip}
+                            onPress={() => toggleDraftSourcingSpecialist(employee.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${employee.displayName}`}
+                          >
+                            <Text style={styles.sourcingSpecialistChipText} numberOfLines={1}>
+                              {employee.displayName}
+                            </Text>
+                            <X size={13} color={PRIMARY} />
+                          </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.handledByEmptySelected}>No staff selected yet</Text>
+                  )}
+                </View>
+
+                <View style={styles.handledBySearch}>
+                  <Search size={17} color={TEXT_MUTED} />
+                  <TextInput
+                    value={specialistSearch}
+                    onChangeText={setSpecialistSearch}
+                    placeholder="Search staff by name"
+                    placeholderTextColor="#9AA3B5"
+                    style={styles.handledBySearchInput}
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    accessibilityLabel="Search staff by name"
+                  />
+                  {specialistSearch ? (
+                    <TouchableOpacity
+                      onPress={() => setSpecialistSearch("")}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear staff search"
+                    >
+                      <X size={15} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <Text style={[styles.handledBySectionLabel, styles.handledByStaffHeading]}>ALL STAFF</Text>
+                <ScrollView
+                  style={[
+                    styles.handledByStaffList,
+                    {
+                      height: Math.min(
+                        232,
+                        Math.max(58, filteredSourcingSpecialists.length * 58),
+                        Math.max(58, windowHeight * 0.34)
+                      ),
+                    },
+                  ]}
+                  contentContainerStyle={styles.handledByStaffListContent}
+                  showsVerticalScrollIndicator
+                  keyboardShouldPersistTaps="always"
+                  keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                >
+                  {specialistsLoading ? (
+                    <View style={styles.specialistLoading}>
+                      <ActivityIndicator size="small" color={PRIMARY} />
+                      <Text style={styles.sourcingSpecialistEmpty}>Loading staff…</Text>
+                    </View>
+                  ) : filteredSourcingSpecialists.length ? filteredSourcingSpecialists.map((employee) => {
+                    const selected = draftSourcingSpecialistIds.includes(employee.id);
+                    const color = specialistColor(employee);
+                    return (
+                      <TouchableOpacity
+                        key={employee.id}
+                        style={styles.handledByStaffOption}
+                        onPress={() => toggleDraftSourcingSpecialist(employee.id)}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={employee.displayName}
+                        accessibilityHint={selected ? "Remove this team member" : "Add this team member"}
+                        accessibilityState={{ checked: selected }}
+                      >
+                        <View style={[styles.handledByStaffAvatar, { backgroundColor: color.background }]}>
+                          <Text style={[styles.handledByStaffAvatarText, { color: color.foreground }]}>
+                            {specialistInitials(employee)}
+                          </Text>
+                        </View>
+                        <View style={styles.handledByStaffDetails}>
+                          <Text style={styles.handledByStaffName} numberOfLines={1}>
+                            {employee.displayName}
+                          </Text>
+                          {employee.mobile ? (
+                            <View style={styles.handledByStaffPhoneRow}>
+                              <Phone size={12} color="#64748B" strokeWidth={2} />
+                              <Text style={styles.handledByStaffMobile} numberOfLines={1}>
+                                {employee.mobile}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <View
+                          style={[
+                            styles.sourcingSpecialistCheckbox,
+                            selected && styles.sourcingSpecialistCheckboxSelected,
+                          ]}
+                        >
+                          {selected ? <Check size={13} color="#ffffff" strokeWidth={3} /> : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }) : (
+                    <Text style={styles.sourcingSpecialistEmpty}>No matching staff members found.</Text>
+                  )}
+                </ScrollView>
+
+                <View style={styles.handledByFooter}>
+                  <Text style={styles.handledByFooterCount}>
+                    {draftSourcingSpecialistIds.length} selected
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.handledByDoneButton}
+                    onPress={() => {
+                      setFormValues((current) => ({
+                        ...current,
+                        sourcingSpecialistIds: [...draftSourcingSpecialistIds],
+                      }));
+                      setSpecialistOptionsOpen(false);
+                      setSpecialistSearch("");
+                      clearFieldError("sourcingSpecialistIds");
+                      setFormError("");
+                      Keyboard.dismiss();
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Done selecting staff members"
+                  >
+                    <Text style={styles.handledByDoneText}>Done</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2446,8 +2778,16 @@ export default function ExpenseManagementScreen() {
                     padding: 20,
                   }}
                 >
-                  {/* Date pill; expense IDs are kept internal and not shown in the UI. */}
-                  <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginBottom: 10 }}>
+                  {/* Amount and date share one compact row. */}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: PRIMARY, letterSpacing: 0.45, marginBottom: 3 }}>
+                        TOTAL AMOUNT
+                      </Text>
+                      <Text style={{ fontSize: 29, fontWeight: "800", color: PRIMARY, letterSpacing: -0.7, lineHeight: 33 }}>
+                        {money(activeExpense.amount)}
+                      </Text>
+                    </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: SURFACE, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fda4af" }}>
                       <CalendarDays size={12} color={PRIMARY} />
                       <Text style={{ fontSize: 12, fontWeight: "600", color: TEXT }}>
@@ -2455,13 +2795,19 @@ export default function ExpenseManagementScreen() {
                       </Text>
                     </View>
                   </View>
-                  {/* Total amount */}
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: PRIMARY, letterSpacing: 0.45, marginBottom: 3 }}>
-                    TOTAL AMOUNT
-                  </Text>
-                  <Text style={{ fontSize: 29, fontWeight: "800", color: PRIMARY, letterSpacing: -0.7, lineHeight: 33 }}>
-                    {money(activeExpense.amount)}
-                  </Text>
+                </View>
+
+                <View style={styles.sourcingSpecialistDetail}>
+                  <Text style={styles.sourcingSpecialistDetailLabel}>HANDLED BY</Text>
+                  {activeExpense.sourcingSpecialists?.length ? (
+                    <View style={styles.detailSpecialistChips}>
+                      {activeExpense.sourcingSpecialists.map((employee) => (
+                        <SpecialistChip key={employee.id} employee={employee} />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.sourcingSpecialistNoAssignment}>No staff assigned</Text>
+                  )}
                 </View>
 
                 {/* ── NOTES STRIP ── */}
@@ -2487,19 +2833,6 @@ export default function ExpenseManagementScreen() {
                     </Text>
                   </View>
                 ) : null}
-
-                <View style={styles.sourcingSpecialistDetail}>
-                  <Text style={styles.sourcingSpecialistDetailLabel}>SOURCING SPECIALIST</Text>
-                  {activeExpense.sourcingSpecialists?.length ? (
-                    <View style={styles.detailSpecialistChips}>
-                      {activeExpense.sourcingSpecialists.map((employee) => (
-                        <SpecialistChip key={employee.id} employee={employee} />
-                      ))}
-                    </View>
-                  ) : (
-                    <Text style={styles.sourcingSpecialistNoAssignment}>No specialists assigned</Text>
-                  )}
-                </View>
 
                 {/* ── BILL / RECEIPT ROW ── */}
                 {activeExpense.billFileName ? (
@@ -2607,12 +2940,12 @@ export default function ExpenseManagementScreen() {
         visible={billPreviewVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setBillPreviewVisible(false)}
+        onRequestClose={closeBillPreview}
       >
         <View style={styles.modalBackdrop}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => setBillPreviewVisible(false)}
+            onPress={closeBillPreview}
           />
           <View
             style={[
@@ -2633,7 +2966,7 @@ export default function ExpenseManagementScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TouchableOpacity
                   style={styles.closeButton}
-                  onPress={() => setBillPreviewVisible(false)}
+                  onPress={closeBillPreview}
                   activeOpacity={0.7}
                 >
                   <X size={17} color={TEXT_MUTED} />
@@ -2641,25 +2974,60 @@ export default function ExpenseManagementScreen() {
               </View>
             </View>
             <View style={styles.billPreviewContainer}>
-              {billLoading ? (
+              {billPreviewIsPdf && billPreviewPdfBase64 && Platform.OS !== "web" ? (
+                <>
+                  {billPreviewPdfImage ? (
+                    <Image
+                      source={{ uri: billPreviewPdfImage }}
+                      style={styles.billPreviewImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={styles.loadingBox}>
+                      <ActivityIndicator size="large" color={PRIMARY} />
+                      <Text style={styles.loadingText}>Preparing PDF preview…</Text>
+                    </View>
+                  )}
+                  <WebView
+                    source={{ html: createPdfPreviewHtml(billPreviewPdfBase64) }}
+                    originWhitelist={["*"]}
+                    javaScriptEnabled
+                    style={styles.pdfRenderWorker}
+                    onMessage={(event) => {
+                      const value = event.nativeEvent.data;
+                      if (value.startsWith("data:image/png;base64,")) {
+                        setBillPreviewPdfImage(value);
+                      } else {
+                        setNotice({ kind: "error", message: "Unable to render this PDF receipt." });
+                      }
+                    }}
+                    onError={() => setNotice({ kind: "error", message: "Unable to render this PDF receipt." })}
+                  />
+                </>
+              ) : billLoading ? (
                 <View style={styles.loadingBox}>
                   <ActivityIndicator size="large" color={PRIMARY} />
                   <Text style={styles.loadingText}>Loading receipt…</Text>
                 </View>
+              ) : billPreviewIsPdf && billPreviewPdfBase64 ? (
+                Platform.OS === "web" ? (
+                  billPreviewUrl ? (
+                    <iframe
+                      src={billPreviewUrl}
+                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
+                      title="Receipt PDF"
+                    />
+                  ) : null
+                ) : null
               ) : billPreviewUrl ? (
-                activeExpense?.billFileName?.toLowerCase().endsWith(".pdf") ? (
+                billPreviewIsPdf ? (
                   Platform.OS === "web" ? (
                     <iframe
                       src={billPreviewUrl}
                       style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
                       title="Receipt PDF"
                     />
-                  ) : (
-                    <View style={styles.pdfFallbackBox}>
-                      <FileText size={48} color={PRIMARY} />
-                      <Text style={styles.pdfFallbackText}>PDF ready to download</Text>
-                    </View>
-                  )
+                  ) : null
                 ) : (
                   <Image
                     source={{ uri: billPreviewUrl }}
@@ -2670,7 +3038,9 @@ export default function ExpenseManagementScreen() {
               ) : (
                 <View style={styles.pdfFallbackBox}>
                   <FileText size={48} color={PRIMARY} />
-                  <Text style={styles.pdfFallbackText}>Tap Download to save copy</Text>
+                  <Text style={styles.pdfFallbackText}>
+                    {billLoading ? "Preparing receipt preview…" : "Receipt preview is unavailable."}
+                  </Text>
                 </View>
               )}
             </View>
@@ -2852,6 +3222,34 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  expenseBrandMark: {
+    backgroundColor: "transparent",
+    borderColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 0,
+    width: 42,
+    height: 42,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    boxShadow: "none",
+  },
+  expenseHeaderBar: {
+    paddingHorizontal: 14,
+  },
+  expenseHeaderBrand: {
+    gap: 8,
+  },
+  expenseBrandTitle: {
+    marginRight: 8,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    color: "#881337",
+    letterSpacing: -0.6,
+  },
   fixedTopSection: {
     paddingHorizontal: 16,
     backgroundColor: "transparent",
@@ -2997,7 +3395,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   compactCard: {
-    minHeight: 112,
+    minHeight: 78,
     backgroundColor: SURFACE,
     borderRadius: 16,
     borderWidth: 1,
@@ -3005,10 +3403,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: PRIMARY,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "stretch",
-    marginBottom: 6,
+    marginBottom: EXPENSE_CARD_GAP,
     ...Platform.select({
       ios: {
         shadowColor: "#292524",
@@ -3023,8 +3421,8 @@ const styles = StyleSheet.create({
   expenseCardContent: {
     flex: 1,
     minWidth: 0,
-    justifyContent: "space-between",
-    gap: 7,
+    justifyContent: "center",
+    gap: 10,
   },
   expenseCardTopRow: {
     flexDirection: "row",
@@ -3032,23 +3430,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  expenseCardBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    minWidth: 0,
-    minHeight: 17,
-  },
   expenseSourceIconSlot: {
     width: 15,
     height: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  expenseNotesIconSlot: {
-    width: 15,
-    height: 17,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -3077,19 +3461,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-  },
-  specialistAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  specialistInitials: {
-    fontSize: 8,
-    lineHeight: 10,
-    fontWeight: "800",
   },
   specialistChipText: {
     flexShrink: 1,
@@ -3148,14 +3519,6 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontWeight: "700",
     letterSpacing: 0,
-  },
-  cardTitleText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "600",
-    color: TEXT_MUTED,
   },
   cardRightColumn: {
     alignItems: "flex-end",
@@ -3241,11 +3604,11 @@ const styles = StyleSheet.create({
     color: PRIMARY,
   },
   loadMoreRow: {
+    height: LOAD_MORE_FOOTER_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
   },
   loadMoreText: {
     fontSize: 12,
@@ -3509,7 +3872,6 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "85%",
   },
   modalCard: {
     backgroundColor: SURFACE,
@@ -3520,8 +3882,8 @@ const styles = StyleSheet.create({
   },
   sheetHandleRow: {
     alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 2,
   },
   sheetHandle: {
     width: 36,
@@ -3534,8 +3896,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 6,
+    paddingBottom: 9,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
@@ -3582,20 +3944,20 @@ const styles = StyleSheet.create({
   },
   calendarOnlyContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 9,
   },
   filterCalendar: {
     backgroundColor: BACKGROUND,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 12,
+    padding: 10,
   },
   calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 7,
   },
   calendarNav: {
     width: 32,
@@ -3615,7 +3977,7 @@ const styles = StyleSheet.create({
   calendarWeekRow: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   calendarWeekday: {
     width: 34,
@@ -3630,12 +3992,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
   },
   calendarDay: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 2,
+    marginVertical: 1,
   },
   calendarDayOutside: {
     opacity: 0.3,
@@ -3670,7 +4032,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: BORDER,
     backgroundColor: SURFACE,
@@ -4092,6 +4454,14 @@ const styles = StyleSheet.create({
     height: 350,
     borderRadius: 12,
   },
+  pdfRenderWorker: {
+    position: "absolute",
+    width: 2,
+    height: 2,
+    opacity: 0.01,
+    left: 0,
+    top: 0,
+  },
   pdfFallbackBox: {
     alignItems: "center",
     justifyContent: "center",
@@ -4394,6 +4764,160 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  handledByOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "flex-end",
+  },
+  handledBySheetCard: {
+    width: "100%",
+    flexShrink: 1,
+    marginTop: Platform.OS === "web" ? 18 : 0,
+    maxHeight: "90%",
+    backgroundColor: SURFACE,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    overflow: "hidden",
+  },
+  handledBySubtitle: {
+    marginTop: 3,
+    color: TEXT_MUTED,
+    fontSize: 12,
+  },
+  handledBySelectedSection: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  handledBySectionLabel: {
+    marginBottom: 9,
+    color: TEXT_MUTED,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  handledByStaffHeading: {
+    marginHorizontal: 20,
+  },
+  handledBySelectedChips: {
+    alignItems: "center",
+    gap: 7,
+    paddingRight: 4,
+  },
+  handledByEmptySelected: {
+    paddingVertical: 7,
+    color: TEXT_MUTED,
+    fontSize: 13,
+  },
+  handledBySearch: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginHorizontal: 20,
+    marginTop: 14,
+    marginBottom: 16,
+    paddingHorizontal: 13,
+    borderRadius: 13,
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  handledBySearchInput: {
+    flex: 1,
+    height: 46,
+    fontSize: 14,
+    color: TEXT,
+  },
+  handledByStaffList: {
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
+    maxHeight: 232,
+    paddingHorizontal: 16,
+  },
+  handledByStaffListContent: {
+    paddingBottom: 0,
+  },
+  handledByStaffOption: {
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 3,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    backgroundColor: BACKGROUND,
+  },
+  handledByStaffAvatar: {
+    width: 36,
+    height: 36,
+    flexShrink: 0,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handledByStaffAvatarText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  handledByStaffName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT,
+  },
+  handledByStaffDetails: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  handledByStaffMobile: {
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  handledByStaffPhoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 3,
+  },
+  handledByFooter: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  handledByFooterCount: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_MUTED,
+  },
+  handledByDoneButton: {
+    minWidth: 104,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    borderRadius: 13,
+    backgroundColor: PRIMARY,
+  },
+  handledByDoneText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   sourcingSpecialistPicker: {
     borderWidth: 1,
     borderColor: BORDER,
@@ -4437,30 +4961,6 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontWeight: "600",
   },
-  sourcingSpecialistOptions: {
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    padding: 8,
-    gap: 6,
-  },
-  sourcingSpecialistSearch: {
-    height: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 9,
-    borderRadius: 10,
-    backgroundColor: BACKGROUND,
-  },
-  sourcingSpecialistSearchInput: {
-    flex: 1,
-    height: 38,
-    fontSize: 12,
-    color: TEXT,
-  },
-  sourcingSpecialistList: {
-    maxHeight: 150,
-  },
   specialistLoading: {
     minHeight: 52,
     flexDirection: "row",
@@ -4468,30 +4968,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  sourcingSpecialistOption: {
-    minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    paddingHorizontal: 6,
-  },
   sourcingSpecialistCheckbox: {
-    width: 19,
-    height: 19,
-    borderWidth: 1,
+    width: 20,
+    height: 20,
+    flexShrink: 0,
+    borderWidth: 1.5,
     borderColor: "#CBD5E1",
-    borderRadius: 6,
+    borderRadius: 3,
     alignItems: "center",
     justifyContent: "center",
   },
   sourcingSpecialistCheckboxSelected: {
     borderColor: PRIMARY,
     backgroundColor: PRIMARY,
-  },
-  sourcingSpecialistOptionText: {
-    flex: 1,
-    fontSize: 13,
-    color: TEXT,
   },
   sourcingSpecialistEmpty: {
     paddingHorizontal: 6,

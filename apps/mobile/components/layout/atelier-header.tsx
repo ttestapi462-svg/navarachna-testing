@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,6 +20,11 @@ export interface AtelierHeaderProps {
   icon?: React.ReactNode;
   compactBrand?: boolean;
   backgroundColor?: string;
+  brandMarkStyle?: StyleProp<ViewStyle>;
+  brandTitleStyle?: StyleProp<TextStyle>;
+  barStyle?: StyleProp<ViewStyle>;
+  brandContainerStyle?: StyleProp<ViewStyle>;
+  preserveTitleSize?: boolean;
 }
 
 export function AtelierHeader({
@@ -31,6 +37,11 @@ export function AtelierHeader({
   icon,
   compactBrand = false,
   backgroundColor,
+  brandMarkStyle,
+  brandTitleStyle,
+  barStyle,
+  brandContainerStyle,
+  preserveTitleSize = false,
 }: AtelierHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -56,13 +67,13 @@ export function AtelierHeader({
           locations={[0, 0.48, 1]}
           style={styles.ambientWash}
         />
-        <View style={styles.bar}>
+        <View style={[styles.bar, barStyle]}>
           {/* Left: Brand Crest / Feature Icon & Studio Title */}
-          <View style={styles.brandContainer}>
-            <View style={[styles.logoTile, compactBrand && styles.compactLogoTile]}>
+          <View style={[styles.brandContainer, brandContainerStyle]}>
+            <View style={[styles.logoTile, compactBrand && styles.compactLogoTile, brandMarkStyle]}>
               {icon || <Layers size={19} color="#ffffff" strokeWidth={2.3} />}
             </View>
-            <Text style={[styles.brandTitle, compactBrand && styles.compactBrandTitle]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={[styles.brandTitle, compactBrand && styles.compactBrandTitle, brandTitleStyle]} numberOfLines={1} adjustsFontSizeToFit={!preserveTitleSize} minimumFontScale={0.8}>
               {title}
             </Text>
           </View>

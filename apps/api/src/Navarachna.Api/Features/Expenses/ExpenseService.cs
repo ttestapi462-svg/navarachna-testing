@@ -9,17 +9,20 @@ public class ExpenseService(
     IBillStorage storage,
     ILogger<ExpenseService> log)
 {
-    public async Task<IReadOnlyList<SourcingSpecialistResponse>> GetActiveSourcingSpecialistsAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<SourcingSpecialistOptionResponse>> GetActiveSourcingSpecialistsAsync(CancellationToken ct)
     {
         return await db.Employees.AsNoTracking()
-            .Where(employee => employee.IsActive)
+            .Where(employee => employee.IsActive &&
+                employee.Department != null &&
+                employee.Department.Trim().ToLower() == "sourcing specialist")
             .OrderBy(employee => employee.FirstName)
             .ThenBy(employee => employee.LastName)
-            .Select(employee => new SourcingSpecialistResponse(
+            .Select(employee => new SourcingSpecialistOptionResponse(
                 employee.Id,
                 employee.FirstName,
                 employee.LastName,
-                (employee.FirstName + " " + (employee.LastName ?? "")).Trim()))
+                (employee.FirstName + " " + (employee.LastName ?? "")).Trim(),
+                employee.Mobile))
             .ToListAsync(ct);
     }
 
@@ -28,14 +31,14 @@ public class ExpenseService(
         CancellationToken ct)
     {
         if (ids.Count == 0)
-            return new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Select at least one Sourcing Specialist."] };
+            return new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Select at least one staff member."] };
 
         var uniqueIds = ids.Distinct().ToArray();
         var activeCount = await db.Employees.CountAsync(
             employee => employee.IsActive && uniqueIds.Contains(employee.Id), ct);
         return activeCount == uniqueIds.Length
             ? new Dictionary<string, string[]>()
-            : new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Choose only active Sourcing Specialists."] };
+            : new Dictionary<string, string[]> { ["sourcingSpecialistIds"] = ["Choose only active staff members."] };
     }
 
     public async Task<ExpenseResponse> CreateAsync(
@@ -46,31 +49,57 @@ public class ExpenseService(
         var employees = await db.Employees
             .Where(employee => f.SourcingSpecialistIds.Distinct().Contains(employee.Id))
             .ToDictionaryAsync(employee => employee.Id, ct);
-        var bill = await storage.UploadAsync(f.Bill!, ct);
+        var strategy = db.Database.CreateExecutionStrategy();
+        var expense = await strategy.ExecuteAsync(async () =>
+        {
+            var createdExpense = new Expense
+            {
+                ExpenseDate = f.ExpenseDate!.Value,
+                Amount = f.Amount!.Value,
+                CategoryNotes = f.CategoryNotes?.Trim() ?? string.Empty,
+                BillBlobName = string.Empty,
+                BillFileName = string.Empty,
+                BillContentType = string.Empty,
+                SourcingSpecialistIds = f.SourcingSpecialistIds.Distinct().ToArray(),
+                CreatedBy = userId
+                // CreatedAt is set by AppDbContext.SaveChangesAsync
+            };
 
-        var expense = new Expense
-        {
-            ExpenseDate = f.ExpenseDate!.Value,
-            Amount = f.Amount!.Value,
-            CategoryNotes = f.CategoryNotes?.Trim() ?? string.Empty,
-            BillBlobName = bill.BlobName,
-            BillFileName = bill.FileName,
-            BillContentType = bill.ContentType,
-            SourcingSpecialistIds = f.SourcingSpecialistIds.Distinct().ToArray(),
-            CreatedBy = userId
-            // CreatedAt is set by AppDbContext.SaveChangesAsync
-        };
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            StoredBill? bill = null;
+            try
+            {
+                // Save once to allocate the expense number used in the blob filename.
+                db.Expenses.Add(createdExpense);
+                await db.SaveChangesAsync(ct);
 
-        try
-        {
-            db.Expenses.Add(expense);
-            await db.SaveChangesAsync(ct);
-        }
-        catch
-        {
-            await TryDeleteBlobAsync(bill.BlobName);
-            throw;
-        }
+                bill = await storage.UploadAsync(
+                    f.Bill!, createdExpense.Id, createdExpense.ExpenseDate, userId, ct);
+                createdExpense.BillBlobName = bill.BlobName;
+                createdExpense.BillFileName = bill.FileName;
+                createdExpense.BillContentType = bill.ContentType;
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return createdExpense;
+            }
+            catch
+            {
+                if (bill is not null)
+                    await TryDeleteBlobAsync(bill.BlobName);
+
+                try
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                }
+                catch (Exception rollbackException)
+                {
+                    log.LogWarning(rollbackException, "Could not roll back failed expense creation transaction.");
+                }
+
+                db.Entry(createdExpense).State = EntityState.Detached;
+                throw;
+            }
+        });
 
         return ToResponse(expense, ToSpecialistMap(employees));
     }
@@ -149,7 +178,7 @@ public class ExpenseService(
 
         if (f.Bill is not null)
         {
-            var bill = await storage.UploadAsync(f.Bill, ct);
+            var bill = await storage.UploadAsync(f.Bill, e.Id, f.ExpenseDate!.Value, userId, ct);
 
             newBlob = bill.BlobName;
             oldBlob = e.BillBlobName;
@@ -179,7 +208,7 @@ public class ExpenseService(
             throw;
         }
 
-        if (oldBlob is not null)
+        if (oldBlob is not null && !string.Equals(oldBlob, newBlob, StringComparison.Ordinal))
             await TryDeleteBlobAsync(oldBlob);
 
         return ToResponse(e, ToSpecialistMap(employees));
