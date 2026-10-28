@@ -115,6 +115,11 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Email).IsUnique();
             entity.Property(e => e.Salary).HasPrecision(12, 2);
+            entity.Property(e => e.AadhaarNumber).HasColumnName("AadhaarNumber");
+            entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt").HasDefaultValueSql("clock_timestamp()");
+            entity.Property(e => e.CreatedBy).HasColumnName("CreatedBy");
+            entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt");
+            entity.Property(e => e.UpdatedBy).HasColumnName("UpdatedBy");
             entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid")
                 .ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
             entity.HasQueryFilter(e => e.IsActive);

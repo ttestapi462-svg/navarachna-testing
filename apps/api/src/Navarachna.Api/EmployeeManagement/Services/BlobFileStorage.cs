@@ -28,14 +28,46 @@ public class BlobFileStorage : IFileStorage
             throw new InvalidOperationException(
                 "Blob storage is enabled but neither Storage:Blob:ConnectionString nor Storage:Blob:AccountUrl is set.");
 
-        _container.CreateIfNotExists(PublicAccessType.None);
+        try
+        {
+            _container.CreateIfNotExists(PublicAccessType.None);
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status is 403 or 409)
+        {
+            // Container already exists, or account policy / credentials do not permit creating/inspecting container permissions
+        }
     }
 
-    public async Task<string> SaveAsync(Stream content, string extension, CancellationToken ct)
+    public async Task<string> SaveAsync(Stream content, string fileNamePrefix, string extension, CancellationToken ct)
     {
-        var name = $"{DateTime.UtcNow:yyyy}/{DateTime.UtcNow:MM}/{Guid.NewGuid():N}{extension}";
-        await _container.GetBlobClient(name).UploadAsync(content, overwrite: false, cancellationToken: ct);
+        // Sanitise: replace characters that are valid in blob names but messy in URLs / file explorers
+        var safeName = SanitiseName(fileNamePrefix);
+        var name = $"{DateTime.UtcNow:yyyy}/{DateTime.UtcNow:MM}/{safeName}{extension}";
+        var blobClient = _container.GetBlobClient(name);
+
+        var contentType = extension.ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream"
+        };
+
+        var options = new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
+        };
+
+        await blobClient.UploadAsync(content, options, cancellationToken: ct);
         return name;
+    }
+
+    private static string SanitiseName(string name)
+    {
+        // Allow letters, digits, hyphens, underscores. Replace everything else with '_'.
+        var chars = name.Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
+        var sanitised = string.Concat(chars);
+        return string.IsNullOrWhiteSpace(sanitised) ? Guid.NewGuid().ToString("N") : sanitised;
     }
 
     public async Task<Stream> OpenAsync(string relativePath, CancellationToken ct) =>

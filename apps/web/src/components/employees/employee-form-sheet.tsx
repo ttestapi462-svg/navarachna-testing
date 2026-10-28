@@ -3,6 +3,8 @@
 import React, { useId, useMemo, useState } from "react";
 import { useForm, Controller, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
 import { ApiError } from "@/lib/api-client";
 import { format, isAfter, startOfDay } from "date-fns";
@@ -85,6 +87,7 @@ import {
   employeeSchema,
   type EmployeeFormData,
   DEPARTMENTS,
+  STORED_PASSWORD_MASK,
 } from "@/lib/validations/employee";
 import { getDesignationMeta } from "@/lib/designation-config";
 import {
@@ -111,6 +114,9 @@ import {
   X,
   Check,
   ShieldCheck,
+  KeyRound,
+  Eye,
+  EyeOff,
   AlertCircle,
 } from "lucide-react";
 
@@ -155,8 +161,9 @@ function EmployeeFormDialogContent({
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
-  } = useForm<EmployeeFormData>({
+  } = useForm<z.input<typeof employeeSchema>, unknown, EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     mode: "onTouched",
     defaultValues: isEdit && employee
@@ -165,11 +172,18 @@ function EmployeeFormDialogContent({
           lastName: employee.lastName || "",
           email: employee.email,
           mobile: employee.mobile,
-          panNumber: "",
-          aadhaarNumber: "",
+          panNumber: employee.panNumber || "",
+          aadhaarNumber: employee.aadhaarNumber || "",
           department: employee.department || "Master Tailor",
-          salary: employee.salary,
+          salary: employee.salary ?? undefined,
           dateOfJoining: employee.dateOfJoining,
+          credentialsEnabled: false,
+          credentialsUsername: "",
+          credentialsPassword: "",
+          credentialsConfirmPassword: "",
+          loginUsername: employee.loginUsername || "",
+          loginPassword: employee.loginUsername ? STORED_PASSWORD_MASK : "",
+          loginConfirmPassword: employee.loginUsername ? STORED_PASSWORD_MASK : "",
         }
       : {
           firstName: "",
@@ -179,15 +193,54 @@ function EmployeeFormDialogContent({
           panNumber: "",
           aadhaarNumber: "",
           department: "Master Tailor",
-          salary: 35000,
+          salary: undefined,
           dateOfJoining: new Date().toISOString().split("T")[0],
+          credentialsEnabled: false,
+          credentialsUsername: "",
+          credentialsPassword: "",
+          credentialsConfirmPassword: "",
+          loginUsername: "",
+          loginPassword: "",
+          loginConfirmPassword: "",
         },
   });
+
+  const credentialsEnabled = watch("credentialsEnabled") ?? false;
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Live password-strength checks: length, upper, lower, number, special.
+  const credentialPassword = watch("credentialsPassword") ?? "";
+  const passwordChecks = [
+    credentialPassword.length >= 8,
+    /[A-Z]/.test(credentialPassword),
+    /[a-z]/.test(credentialPassword),
+    /[0-9]/.test(credentialPassword),
+    /[^A-Za-z0-9]/.test(credentialPassword),
+  ];
+  const passwordMetCount = passwordChecks.filter(Boolean).length;
+  const passwordStrength =
+    !credentialPassword
+      ? null
+      : passwordMetCount <= 2
+        ? { label: "Weak", bar: "bg-destructive", text: "text-destructive" }
+        : passwordMetCount === 3
+          ? { label: "Fair", bar: "bg-amber-500", text: "text-amber-600" }
+          : passwordMetCount === 4
+            ? { label: "Good", bar: "bg-emerald-500", text: "text-emerald-600" }
+            : { label: "Strong", bar: "bg-emerald-600", text: "text-emerald-700" };
 
   const onSubmit = async (data: EmployeeFormData) => {
     setConflictError(null);
     try {
       if (isEdit && employee) {
+        // Send the login change only when actually modified — the stored-password
+        // mask means "unchanged"; blank fields on a login-less employee too.
+        const usernameChanged =
+          !!data.loginUsername?.trim() &&
+          data.loginUsername.trim() !== (employee.loginUsername ?? "");
+        const passwordChanged =
+          !!data.loginPassword && data.loginPassword !== STORED_PASSWORD_MASK;
         const payload: EmployeeRequest = {
           firstName: data.firstName.trim(),
           lastName: data.lastName?.trim() || undefined,
@@ -196,13 +249,19 @@ function EmployeeFormDialogContent({
           panNumber: data.panNumber ? data.panNumber.toUpperCase().trim() : undefined,
           aadhaarNumber: data.aadhaarNumber ? data.aadhaarNumber.trim() : undefined,
           department: data.department,
-          salary: Number(data.salary),
+          salary: data.salary ?? null,
           dateOfJoining: data.dateOfJoining,
           version: employee.version,
+          loginUsername: usernameChanged ? data.loginUsername!.trim() : undefined,
+          loginPassword: passwordChanged ? data.loginPassword : undefined,
         };
         await updateMutation.mutateAsync({ id: employee.id, data: payload });
         toast.success("Profile updated successfully", {
-          description: `${data.firstName} ${data.lastName || ""}'s employee records were saved.`,
+          description: `${data.firstName} ${data.lastName || ""}'s employee records were saved${
+            usernameChanged || passwordChanged
+              ? ", with login credentials updated"
+              : ""
+          }.`,
         });
       } else {
         const payload: EmployeeRequest = {
@@ -213,12 +272,19 @@ function EmployeeFormDialogContent({
           panNumber: data.panNumber ? data.panNumber.toUpperCase().trim() : undefined,
           aadhaarNumber: data.aadhaarNumber ? data.aadhaarNumber.trim() : undefined,
           department: data.department,
-          salary: Number(data.salary),
+          salary: data.salary ?? null,
           dateOfJoining: data.dateOfJoining,
+          credentials:
+            data.credentialsEnabled && data.credentialsUsername && data.credentialsPassword
+              ? {
+                  username: data.credentialsUsername.trim(),
+                  password: data.credentialsPassword,
+                }
+              : undefined,
         };
         await createMutation.mutateAsync(payload);
         toast.success("Employee registered successfully", {
-          description: `${data.firstName} ${data.lastName || ""} was added as ${data.department}.`,
+          description: `${data.firstName} ${data.lastName || ""} was added as ${data.department}${data.credentialsEnabled ? " with login credentials created" : ""}.`,
         });
       }
       onOpenChange(false);
@@ -242,7 +308,8 @@ function EmployeeFormDialogContent({
     }
   };
 
-  const onInvalid = (fieldErrors: FieldErrors<EmployeeFormData>) => {
+  type EmployeeFormValues = z.input<typeof employeeSchema>;
+  const onInvalid = (fieldErrors: FieldErrors<EmployeeFormValues>) => {
     const errorCount = Object.keys(fieldErrors).length;
     const firstMsg = Object.values(fieldErrors).find((e) => e?.message)?.message;
     toast.warning("Please check required fields", {
@@ -585,7 +652,7 @@ function EmployeeFormDialogContent({
                 {/* Monthly Compensation */}
                 <Field className="gap-1">
                   <FieldLabel className={cn("text-[11px] font-medium", errors.salary ? "text-destructive" : "text-foreground/85")}>
-                    Monthly Compensation <span className="text-destructive font-bold">*</span>
+                    Monthly Compensation <span className="text-[10px] font-normal text-muted-foreground">(optional)</span>
                   </FieldLabel>
                   <InputGroup
                     aria-invalid={!!errors.salary}
@@ -689,11 +756,7 @@ function EmployeeFormDialogContent({
                     <InputGroupInput
                       maxLength={10}
                       {...register("panNumber")}
-                      placeholder={
-                        isEdit && employee?.panMasked
-                          ? employee.panMasked
-                          : "ABCDE1234F"
-                      }
+                      placeholder="ABCDE1234F"
                       onChange={(e) =>
                         setValue("panNumber", e.target.value.toUpperCase())
                       }
@@ -727,11 +790,6 @@ function EmployeeFormDialogContent({
                       <span>{errors.panNumber.message}</span>
                     </FieldError>
                   )}
-                  {isEdit && employee?.panMasked && (
-                    <FieldDescription className="text-[10px] text-muted-foreground mt-0.5">
-                      Current stored: {employee.panMasked}
-                    </FieldDescription>
-                  )}
                 </Field>
 
                 {/* 12-Digit Aadhaar */}
@@ -758,11 +816,7 @@ function EmployeeFormDialogContent({
                           e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
                         },
                       })}
-                      placeholder={
-                        isEdit && employee?.aadhaarMasked
-                          ? employee.aadhaarMasked
-                          : "2345 6789 0123"
-                      }
+                      placeholder="2345 6789 0123"
                       className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
                       disabled={isPending}
                       aria-invalid={!!errors.aadhaarNumber}
@@ -793,14 +847,352 @@ function EmployeeFormDialogContent({
                       <span>{errors.aadhaarNumber.message}</span>
                     </FieldError>
                   )}
-                  {isEdit && employee?.aadhaarMasked && (
-                    <FieldDescription className="text-[10px] text-muted-foreground mt-0.5">
-                      Current stored: {employee.aadhaarMasked}
-                    </FieldDescription>
-                  )}
                 </Field>
               </div>
             </div>
+
+              {/* ── CARD 4: User Login Credentials (Optional, create mode only) ─────── */}
+              {!isEdit && (
+                <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+                  {/* Grant-access question + toggle */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-medium text-foreground/85 leading-snug min-w-0">
+                      Do you want to give the user login credentials?
+                    </span>
+                    <Switch
+                      checked={credentialsEnabled}
+                      onCheckedChange={(v) =>
+                        setValue("credentialsEnabled", v, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      disabled={isPending}
+                      aria-label="Give user login credentials"
+                    />
+                  </div>
+
+                  {credentialsEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+                      {/* Username */}
+                      <Field className="gap-1 sm:col-span-2">
+                        <FieldLabel className={cn("text-[11px] font-medium", errors.credentialsUsername ? "text-destructive" : "text-foreground/85")}>
+                          Username <span className="text-destructive font-bold">*</span>
+                        </FieldLabel>
+                        <InputGroup
+                          aria-invalid={!!errors.credentialsUsername}
+                          className={cn(
+                            "h-8 transition-all",
+                            errors.credentialsUsername
+                              ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                              : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                          )}
+                        >
+                          <InputGroupAddon>
+                            <User className={cn("size-3.5", errors.credentialsUsername ? "text-destructive" : "text-muted-foreground/70")} />
+                          </InputGroupAddon>
+                          <InputGroupInput
+                            minLength={3}
+                            maxLength={50}
+                            {...register("credentialsUsername")}
+                            placeholder="e.g. rajesh.k"
+                            className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                            disabled={isPending}
+                            aria-invalid={!!errors.credentialsUsername}
+                          />
+                        </InputGroup>
+                        {errors.credentialsUsername && (
+                          <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                            <AlertCircle className="size-3 shrink-0" />
+                            <span>{errors.credentialsUsername.message}</span>
+                          </FieldError>
+                        )}
+                      </Field>
+
+                      {/* Password */}
+                      <Field className="gap-1">
+                        <FieldLabel className={cn("text-[11px] font-medium", errors.credentialsPassword ? "text-destructive" : "text-foreground/85")}>
+                          Password <span className="text-destructive font-bold">*</span>
+                        </FieldLabel>
+                        <InputGroup
+                          aria-invalid={!!errors.credentialsPassword}
+                          className={cn(
+                            "h-8 transition-all",
+                            errors.credentialsPassword
+                              ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                              : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                          )}
+                        >
+                          <InputGroupAddon>
+                            <KeyRound className={cn("size-3.5", errors.credentialsPassword ? "text-destructive" : "text-muted-foreground/70")} />
+                          </InputGroupAddon>
+                          <InputGroupInput
+                            type={showPassword ? "text" : "password"}
+                            {...register("credentialsPassword")}
+                            placeholder="Min 8 chars"
+                            className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                            disabled={isPending}
+                            autoComplete="new-password"
+                            aria-invalid={!!errors.credentialsPassword}
+                          />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                              variant="ghost"
+                              size="icon-xs"
+                              tabIndex={-1}
+                              type="button"
+                              className="size-5 rounded-md hover:bg-muted/60"
+                              onClick={() => setShowPassword((p) => !p)}
+                              disabled={isPending}
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="size-3.5 text-muted-foreground/70" />
+                              ) : (
+                                <Eye className="size-3.5 text-muted-foreground/70" />
+                              )}
+                            </InputGroupButton>
+                          </InputGroupAddon>
+                        </InputGroup>
+                        {errors.credentialsPassword && (
+                          <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                            <AlertCircle className="size-3 shrink-0" />
+                            <span>{errors.credentialsPassword.message}</span>
+                          </FieldError>
+                        )}
+                        {/* Password strength indicator */}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex w-full gap-1">
+                            {passwordChecks.map((_, i) => (
+                              <span
+                                key={i}
+                                className={cn(
+                                  "h-1 flex-1 rounded-full transition-colors",
+                                  i < passwordMetCount
+                                    ? passwordStrength?.bar ?? "bg-border/70"
+                                    : "bg-border/70"
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </Field>
+
+                      {/* Confirm Password */}
+                      <Field className="gap-1">
+                        <FieldLabel className={cn("text-[11px] font-medium", errors.credentialsConfirmPassword ? "text-destructive" : "text-foreground/85")}>
+                          Confirm Password <span className="text-destructive font-bold">*</span>
+                        </FieldLabel>
+                        <InputGroup
+                          aria-invalid={!!errors.credentialsConfirmPassword}
+                          className={cn(
+                            "h-8 transition-all",
+                            errors.credentialsConfirmPassword
+                              ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                              : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                          )}
+                        >
+                          <InputGroupAddon>
+                            <Check className={cn("size-3.5", errors.credentialsConfirmPassword ? "text-destructive" : "text-muted-foreground/70")} />
+                          </InputGroupAddon>
+                          <InputGroupInput
+                            type={showConfirmPassword ? "text" : "password"}
+                            {...register("credentialsConfirmPassword")}
+                            placeholder="Re-enter password"
+                            className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                            disabled={isPending}
+                            autoComplete="new-password"
+                            aria-invalid={!!errors.credentialsConfirmPassword}
+                          />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                              variant="ghost"
+                              size="icon-xs"
+                              tabIndex={-1}
+                              type="button"
+                              className="size-5 rounded-md hover:bg-muted/60"
+                              onClick={() => setShowConfirmPassword((p) => !p)}
+                              disabled={isPending}
+                              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="size-3.5 text-muted-foreground/70" />
+                              ) : (
+                                <Eye className="size-3.5 text-muted-foreground/70" />
+                              )}
+                            </InputGroupButton>
+                          </InputGroupAddon>
+                        </InputGroup>
+                        {errors.credentialsConfirmPassword && (
+                          <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                            <AlertCircle className="size-3 shrink-0" />
+                            <span>{errors.credentialsConfirmPassword.message}</span>
+                          </FieldError>
+                        )}
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── CARD 4 (Edit mode): User Login Credentials — Username, Password & Confirm Password only ─────── */}
+              {isEdit && (
+                <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-3.5 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                    <div className="flex items-center gap-1.5">
+                      <KeyRound className="size-3.5 text-primary shrink-0" />
+                      <h3 className="text-xs font-semibold text-foreground tracking-tight">
+                        User Login Credentials
+                      </h3>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      •••• shows a stored password exists
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Username */}
+                    <Field className="gap-1 sm:col-span-2">
+                      <FieldLabel className={cn("text-[11px] font-medium", errors.loginUsername ? "text-destructive" : "text-foreground/85")}>
+                        Username
+                      </FieldLabel>
+                      <InputGroup
+                        aria-invalid={!!errors.loginUsername}
+                        className={cn(
+                          "h-8 transition-all",
+                          errors.loginUsername
+                            ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                            : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                        )}
+                      >
+                        <InputGroupAddon>
+                          <User className={cn("size-3.5", errors.loginUsername ? "text-destructive" : "text-muted-foreground/70")} />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          maxLength={50}
+                          {...register("loginUsername")}
+                          placeholder="e.g. rajesh.k"
+                          className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                          disabled={isPending}
+                          aria-invalid={!!errors.loginUsername}
+                        />
+                      </InputGroup>
+                      {errors.loginUsername && (
+                        <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                          <AlertCircle className="size-3 shrink-0" />
+                          <span>{errors.loginUsername.message}</span>
+                        </FieldError>
+                      )}
+                    </Field>
+
+                    {/* Password */}
+                    <Field className="gap-1">
+                      <FieldLabel className={cn("text-[11px] font-medium", errors.loginPassword ? "text-destructive" : "text-foreground/85")}>
+                        Password
+                      </FieldLabel>
+                      <InputGroup
+                        aria-invalid={!!errors.loginPassword}
+                        className={cn(
+                          "h-8 transition-all",
+                          errors.loginPassword
+                            ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                            : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                        )}
+                      >
+                        <InputGroupAddon>
+                          <KeyRound className={cn("size-3.5", errors.loginPassword ? "text-destructive" : "text-muted-foreground/70")} />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          type={showPassword ? "text" : "password"}
+                          {...register("loginPassword")}
+                          placeholder="Enter new password"
+                          className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                          disabled={isPending}
+                          autoComplete="new-password"
+                          aria-invalid={!!errors.loginPassword}
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton
+                            variant="ghost"
+                            size="icon-xs"
+                            tabIndex={-1}
+                            type="button"
+                            className="size-5 rounded-md hover:bg-muted/60"
+                            onClick={() => setShowPassword((p) => !p)}
+                            disabled={isPending}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="size-3.5 text-muted-foreground/70" />
+                            ) : (
+                              <Eye className="size-3.5 text-muted-foreground/70" />
+                            )}
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
+                      {errors.loginPassword && (
+                        <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                          <AlertCircle className="size-3 shrink-0" />
+                          <span>{errors.loginPassword.message}</span>
+                        </FieldError>
+                      )}
+                    </Field>
+
+                    {/* Confirm Password */}
+                    <Field className="gap-1">
+                      <FieldLabel className={cn("text-[11px] font-medium", errors.loginConfirmPassword ? "text-destructive" : "text-foreground/85")}>
+                        Confirm Password
+                      </FieldLabel>
+                      <InputGroup
+                        aria-invalid={!!errors.loginConfirmPassword}
+                        className={cn(
+                          "h-8 transition-all",
+                          errors.loginConfirmPassword
+                            ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                            : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                        )}
+                      >
+                        <InputGroupAddon>
+                          <Check className={cn("size-3.5", errors.loginConfirmPassword ? "text-destructive" : "text-muted-foreground/70")} />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          type={showConfirmPassword ? "text" : "password"}
+                          {...register("loginConfirmPassword")}
+                          placeholder="Re-enter new password"
+                          className="font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground/60 h-8"
+                          disabled={isPending}
+                          autoComplete="new-password"
+                          aria-invalid={!!errors.loginConfirmPassword}
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton
+                            variant="ghost"
+                            size="icon-xs"
+                            tabIndex={-1}
+                            type="button"
+                            className="size-5 rounded-md hover:bg-muted/60"
+                            onClick={() => setShowConfirmPassword((p) => !p)}
+                            disabled={isPending}
+                            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="size-3.5 text-muted-foreground/70" />
+                            ) : (
+                              <Eye className="size-3.5 text-muted-foreground/70" />
+                            )}
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
+                      {errors.loginConfirmPassword && (
+                        <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5">
+                          <AlertCircle className="size-3 shrink-0" />
+                          <span>{errors.loginConfirmPassword.message}</span>
+                        </FieldError>
+                      )}
+                    </Field>
+                  </div>
+                </div>
+              )}
           </form>
         </div>
 

@@ -30,11 +30,19 @@ export interface EmployeeResponse {
   mobile: string;
   panMasked: string | null;
   aadhaarMasked: string | null;
+  panNumber?: string | null;
+  aadhaarNumber?: string | null;
   department: string;
-  salary: number;
+  salary: number | null;
   dateOfJoining: string;
   isActive: boolean;
   createdAt: string;
+  createdBy?: number | null;
+  updatedAt?: string | null;
+  updatedBy?: number | null;
+  createdByUsername?: string | null;
+  updatedByUsername?: string | null;
+  loginUsername?: string | null;
   version: number;
   documents: DocumentResponse[];
 }
@@ -47,9 +55,12 @@ export interface EmployeeRequest {
   panNumber?: string;
   aadhaarNumber?: string;
   department: string;
-  salary: number;
+  salary?: number | null;
   dateOfJoining: string;
+  credentials?: { username: string; password: string };
   version?: number;
+  loginUsername?: string;
+  loginPassword?: string;
 }
 
 export interface PagedResult<T> {

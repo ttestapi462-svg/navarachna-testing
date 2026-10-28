@@ -20,10 +20,17 @@ public class DocumentService(AppDbContext db, IFileStorage storage)
     public async Task<DocumentResponse> UploadAsync(int employeeId, DocumentType type,
         IFormFile file, string? user, CancellationToken ct)
     {
-        if (!await db.Employees.AnyAsync(e => e.Id == employeeId, ct))
-            throw new AppException(404, "Employee not found.");
+        var employee = await db.Employees.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == employeeId, ct)
+            ?? throw new AppException(404, "Employee not found.");
         if (file is null || file.Length == 0) throw new AppException(400, "File is empty.");
         if (file.Length > MaxBytes) throw new AppException(400, "File exceeds the 5 MB limit.");
+
+        // Identity-guarded uploads: Aadhaar/PAN docs only if the employee stored that number.
+        if (type == DocumentType.Aadhaar && string.IsNullOrEmpty(employee.AadhaarNumber))
+            throw new AppException(400, "No Aadhaar number on record for this employee; Aadhaar card uploads are not allowed.");
+        if (type == DocumentType.Pan && string.IsNullOrEmpty(employee.PanNumber))
+            throw new AppException(400, "No PAN number on record for this employee; PAN card uploads are not allowed.");
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!Allowed.TryGetValue(ext, out var rule))
@@ -36,7 +43,19 @@ public class DocumentService(AppDbContext db, IFileStorage storage)
             throw new AppException(400, "File content does not match its extension.");
         stream.Position = 0;
 
-        var path = await storage.SaveAsync(stream, ext, ct);
+        // Build a descriptive, human-readable file name prefix:
+        //   Aadhaar  → AadhaarNumber-DateOfJoining-EmployeeId
+        //   PAN      → PanNumber-DateOfJoining-EmployeeId
+        //   Others   → FirstName-DateOfJoining-EmployeeId
+        var doj = employee.DateOfJoining.ToString("yyyy-MM-dd");
+        var fileNamePrefix = type switch
+        {
+            DocumentType.Aadhaar => $"{employee.AadhaarNumber}-{doj}-{employee.Id}",
+            DocumentType.Pan     => $"{employee.PanNumber}-{doj}-{employee.Id}",
+            _                    => $"{employee.FirstName}-{doj}-{employee.Id}"
+        };
+
+        var path = await storage.SaveAsync(stream, fileNamePrefix, ext, ct);
 
         // One document per type: replace the old one
         var existing = await db.EmployeeDocuments

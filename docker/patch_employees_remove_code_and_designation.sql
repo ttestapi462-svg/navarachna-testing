@@ -25,6 +25,27 @@ BEGIN
     ) THEN
         ALTER TABLE public."Employees" DROP COLUMN "Designation";
     END IF;
+
+    -- Rename AadhaarLast4 to AadhaarNumber to store full Aadhaar number
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'Employees' 
+          AND column_name = 'AadhaarLast4'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'Employees' 
+          AND column_name = 'AadhaarNumber'
+    ) THEN
+        ALTER TABLE public."Employees" RENAME COLUMN "AadhaarLast4" TO "AadhaarNumber";
+    END IF;
+
+    -- Add audit columns (CreatedBy, UpdatedAt, UpdatedBy) to Employees table
+    ALTER TABLE public."Employees" 
+        ADD COLUMN IF NOT EXISTS "CreatedBy" bigint,
+        ADD COLUMN IF NOT EXISTS "UpdatedAt" timestamp with time zone,
+        ADD COLUMN IF NOT EXISTS "UpdatedBy" bigint;
 END $$;
 
 -- 2. Drop legacy index and sequence
@@ -101,16 +122,21 @@ BEGIN
                 THEN substring(e."PanNumber" from 1 for 5) || '****' || substring(e."PanNumber" from 10 for 1) 
                 ELSE NULL 
             END,
+            'panNumber', e."PanNumber",
             'aadhaarMasked', CASE 
-                WHEN e."AadhaarLast4" IS NOT NULL 
-                THEN 'XXXX XXXX ' || e."AadhaarLast4" 
+                WHEN e."AadhaarNumber" IS NOT NULL 
+                THEN 'XXXX XXXX ' || RIGHT(e."AadhaarNumber", 4) 
                 ELSE NULL 
             END,
+            'aadhaarNumber', e."AadhaarNumber",
             'department', e."Department",
             'salary', e."Salary",
             'dateOfJoining', to_char(e."DateOfJoining", 'YYYY-MM-DD'),
             'isActive', e."IsActive",
             'createdAt', e."CreatedAt",
+            'createdBy', e."CreatedBy",
+            'updatedAt', e."UpdatedAt",
+            'updatedBy', e."UpdatedBy",
             'version', e.xmin::text::bigint,
             'documents', COALESCE((
                 SELECT jsonb_agg(
@@ -180,16 +206,21 @@ BEGIN
             THEN substring(e."PanNumber" from 1 for 5) || '****' || substring(e."PanNumber" from 10 for 1) 
             ELSE NULL 
         END,
+        'panNumber', e."PanNumber",
         'aadhaarMasked', CASE 
-            WHEN e."AadhaarLast4" IS NOT NULL 
-            THEN 'XXXX XXXX ' || e."AadhaarLast4" 
+            WHEN e."AadhaarNumber" IS NOT NULL 
+            THEN 'XXXX XXXX ' || RIGHT(e."AadhaarNumber", 4) 
             ELSE NULL 
         END,
+        'aadhaarNumber', e."AadhaarNumber",
         'department', e."Department",
         'salary', e."Salary",
         'dateOfJoining', to_char(e."DateOfJoining", 'YYYY-MM-DD'),
         'isActive', e."IsActive",
         'createdAt', e."CreatedAt",
+        'createdBy', e."CreatedBy",
+        'updatedAt', e."UpdatedAt",
+        'updatedBy', e."UpdatedBy",
         'version', e.xmin::text::bigint,
         'documents', COALESCE((
             SELECT jsonb_agg(
@@ -227,7 +258,8 @@ CREATE OR REPLACE FUNCTION public.sp_employee_create(
     p_aadhaar_number TEXT DEFAULT NULL,
     p_department TEXT DEFAULT NULL,
     p_salary NUMERIC DEFAULT 0,
-    p_date_of_joining DATE DEFAULT CURRENT_DATE
+    p_date_of_joining DATE DEFAULT CURRENT_DATE,
+    p_created_by BIGINT DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -252,34 +284,32 @@ BEGIN
         RAISE EXCEPTION 'An employee with this email already exists' USING ERRCODE = '23505';
     END IF;
 
-    IF p_aadhaar_number IS NOT NULL AND length(TRIM(p_aadhaar_number)) >= 4 THEN
-        v_aadhaar_last4 := RIGHT(TRIM(p_aadhaar_number), 4);
-    END IF;
-
     INSERT INTO public."Employees" (
         "FirstName",
         "LastName",
         "Email",
         "Mobile",
         "PanNumber",
-        "AadhaarLast4",
+        "AadhaarNumber",
         "Department",
         "Salary",
         "DateOfJoining",
         "IsActive",
-        "CreatedAt"
+        "CreatedAt",
+        "CreatedBy"
     ) VALUES (
         v_clean_first,
         v_clean_last,
         v_clean_email,
         v_clean_mobile,
         NULLIF(TRIM(p_pan_number), ''),
-        v_aadhaar_last4,
+        NULLIF(TRIM(p_aadhaar_number), ''),
         TRIM(p_department),
         COALESCE(p_salary, 0),
         COALESCE(p_date_of_joining, CURRENT_DATE),
         TRUE,
-        clock_timestamp()
+        clock_timestamp(),
+        p_created_by
     )
     RETURNING "Id" INTO v_new_id;
 
@@ -303,7 +333,8 @@ CREATE OR REPLACE FUNCTION public.sp_employee_update(
     p_department TEXT DEFAULT NULL,
     p_salary NUMERIC DEFAULT 0,
     p_date_of_joining DATE DEFAULT CURRENT_DATE,
-    p_version BIGINT DEFAULT NULL
+    p_version BIGINT DEFAULT NULL,
+    p_updated_by BIGINT DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -335,10 +366,6 @@ BEGIN
         RAISE EXCEPTION 'Email % is already used by another employee', v_clean_email USING ERRCODE = '23505';
     END IF;
 
-    IF p_aadhaar_number IS NOT NULL AND length(TRIM(p_aadhaar_number)) >= 4 THEN
-        v_aadhaar_last4 := RIGHT(TRIM(p_aadhaar_number), 4);
-    END IF;
-
     UPDATE public."Employees"
     SET
         "FirstName" = v_clean_first,
@@ -346,10 +373,12 @@ BEGIN
         "Email" = v_clean_email,
         "Mobile" = v_clean_mobile,
         "PanNumber" = COALESCE(NULLIF(TRIM(p_pan_number), ''), "PanNumber"),
-        "AadhaarLast4" = COALESCE(v_aadhaar_last4, "AadhaarLast4"),
+        "AadhaarNumber" = COALESCE(NULLIF(TRIM(p_aadhaar_number), ''), "AadhaarNumber"),
         "Department" = TRIM(p_department),
         "Salary" = COALESCE(p_salary, "Salary"),
-        "DateOfJoining" = COALESCE(p_date_of_joining, "DateOfJoining")
+        "DateOfJoining" = COALESCE(p_date_of_joining, "DateOfJoining"),
+        "UpdatedAt" = clock_timestamp(),
+        "UpdatedBy" = COALESCE(p_updated_by, "UpdatedBy")
     WHERE "Id" = p_id;
 
     RETURN public.sp_employee_get_by_id(p_id);
@@ -362,7 +391,8 @@ $function$;
 -- Soft deletes an employee (sets IsActive = false)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.sp_employee_delete(
-    p_id INTEGER
+    p_id INTEGER,
+    p_updated_by BIGINT DEFAULT NULL
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -371,7 +401,9 @@ DECLARE
     v_rows_affected INTEGER;
 BEGIN
     UPDATE public."Employees"
-    SET "IsActive" = FALSE
+    SET "IsActive" = FALSE,
+        "UpdatedAt" = clock_timestamp(),
+        "UpdatedBy" = COALESCE(p_updated_by, "UpdatedBy")
     WHERE "Id" = p_id AND "IsActive" = TRUE;
 
     GET DIAGNOSTICS v_rows_affected = ROW_COUNT;

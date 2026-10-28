@@ -2,6 +2,7 @@ using EmployeeApi.Models;
 using EmployeeApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace EmployeeApi.Controllers;
 
@@ -22,18 +23,34 @@ public class EmployeesController(EmployeeService svc) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<EmployeeResponse>> Create(EmployeeRequest r, CancellationToken ct)
     {
-        var created = await svc.CreateAsync(r, ct);
+        var actorId = long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid) ? uid : (long?)null;
+        var created = await svc.CreateAsync(r, actorId, ct);
         return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
     public async Task<ActionResult<EmployeeResponse>> Update(int id, EmployeeRequest r, CancellationToken ct)
-        => Ok(await svc.UpdateAsync(id, r, ct));
+    {
+        var actorId = long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid) ? uid : (long?)null;
+        return Ok(await svc.UpdateAsync(id, r, actorId, ct));
+    }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        await svc.DeleteAsync(id, ct);
+        var actorId = long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid) ? uid : (long?)null;
+        await svc.DeleteAsync(id, actorId, ct);
+        return NoContent();
+    }
+
+    [HttpGet("{id:int}/login")]
+    public async Task<IActionResult> GetLoginStatus(int id, CancellationToken ct)
+        => Ok(new { hasLogin = await svc.HasLoginAsync(id, ct) });
+
+    [HttpDelete("{id:int}/login")]
+    public async Task<IActionResult> RemoveLogin(int id, CancellationToken ct)
+    {
+        await svc.RemoveLoginAsync(id, ct);
         return NoContent();
     }
 }

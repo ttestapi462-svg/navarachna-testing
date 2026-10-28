@@ -2,7 +2,9 @@ namespace EmployeeApi.Services;
 
 public interface IFileStorage
 {
-    Task<string> SaveAsync(Stream content, string extension, CancellationToken ct);
+    /// <param name="fileNamePrefix">Caller-supplied descriptive prefix (e.g. "XXXX1234-2024-01-15-42").
+    /// A sanitised form of this becomes the actual file name inside the dated virtual folder.</param>
+    Task<string> SaveAsync(Stream content, string fileNamePrefix, string extension, CancellationToken ct);
     Task<Stream> OpenAsync(string relativePath, CancellationToken ct);
     Task DeleteAsync(string relativePath, CancellationToken ct);
 }
@@ -34,15 +36,24 @@ public class LocalFileStorage(IConfiguration cfg) : IFileStorage
         }
     }
 
-    public async Task<string> SaveAsync(Stream content, string extension, CancellationToken ct)
+    public async Task<string> SaveAsync(Stream content, string fileNamePrefix, string extension, CancellationToken ct)
     {
+        // Sanitise the prefix so it is safe on every OS file system
+        var safeName = SanitiseName(fileNamePrefix);
         var rel = Path.Combine(DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"),
-                               $"{Guid.NewGuid():N}{extension}");
+                               $"{safeName}{extension}");
         var full = Path.Combine(_root, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         await using var fs = File.Create(full);
         await content.CopyToAsync(fs, ct);
         return rel;
+    }
+
+    private static string SanitiseName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitised = string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
+        return string.IsNullOrWhiteSpace(sanitised) ? Guid.NewGuid().ToString("N") : sanitised;
     }
 
     public Task<Stream> OpenAsync(string relativePath, CancellationToken ct) =>

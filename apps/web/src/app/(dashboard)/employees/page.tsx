@@ -5,7 +5,10 @@ import { EmployeeDataGrid } from "@/components/employees/employee-data-grid";
 import { EmployeeFormSheet } from "@/components/employees/employee-form-sheet";
 import { EmployeeDocumentsSheet } from "@/components/employees/employee-documents-sheet";
 import { EmployeeDeleteDialog } from "@/components/employees/employee-delete-dialog";
+import { EmployeeRemoveLoginDialog } from "@/components/employees/employee-remove-login-dialog";
+import { getEmployeeLoginStatus } from "@/services/employee-service";
 import type { EmployeeResponse } from "@/types/employee";
+import { toast } from "@/components/ui/sonner";
 
 export default function EmployeesPage() {
   // ─── Sheet / Dialog State ──────────────────────────────
@@ -19,6 +22,10 @@ export default function EmployeesPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingEmployee, setDeletingEmployee] =
+    useState<EmployeeResponse | null>(null);
+
+  const [removeLoginOpen, setRemoveLoginOpen] = useState(false);
+  const [removeLoginEmployee, setRemoveLoginEmployee] =
     useState<EmployeeResponse | null>(null);
 
   // ─── Fast Memoized Callbacks ───────────────────────────
@@ -42,6 +49,24 @@ export default function EmployeesPage() {
     setDeleteOpen(true);
   }, []);
 
+  const handleRemoveLogin = useCallback(async (emp: EmployeeResponse) => {
+    try {
+      const { hasLogin } = await getEmployeeLoginStatus(emp.id);
+      if (!hasLogin) {
+        toast.info("Login access already revoked", {
+          description: `Login credentials for ${`${emp.firstName} ${emp.lastName || ""}`.trim()} have already been revoked`,
+        });
+        return;
+      }
+      setRemoveLoginEmployee(emp);
+      setRemoveLoginOpen(true);
+    } catch (err: unknown) {
+      toast.error("Failed to check login status", {
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    }
+  }, []);
+
   return (
     <div className="w-full flex-1 flex flex-col min-h-0 h-full">
       <EmployeeDataGrid
@@ -49,6 +74,7 @@ export default function EmployeesPage() {
         onEditEmployee={handleEditEmployee}
         onViewDocuments={handleViewDocuments}
         onDeleteEmployee={handleDeleteEmployee}
+        onRemoveLogin={handleRemoveLogin}
       />
 
       <EmployeeFormSheet
@@ -67,6 +93,12 @@ export default function EmployeesPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         employee={deletingEmployee}
+      />
+
+      <EmployeeRemoveLoginDialog
+        open={removeLoginOpen}
+        onOpenChange={setRemoveLoginOpen}
+        employee={removeLoginEmployee}
       />
     </div>
   );

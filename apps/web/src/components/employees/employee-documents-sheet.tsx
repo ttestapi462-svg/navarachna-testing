@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Sheet,
   SheetClose,
@@ -30,6 +30,13 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -39,6 +46,7 @@ import {
   useUploadDocument,
   useDeleteDocument,
   downloadDocument,
+  getDocumentPreviewUrl,
 } from "@/services/employee-service";
 import {
   DocumentType,
@@ -56,6 +64,7 @@ import {
   FileCheck2,
   AlertCircle,
   FileSignature,
+  Eye,
   X,
 } from "lucide-react";
 
@@ -65,7 +74,7 @@ interface EmployeeDocumentsSheetProps {
   employee: EmployeeResponse | null;
 }
 
-const MAX_FILE_SIZE = 6 * 1024 * 1024; // 6MB limit from .NET [RequestSizeLimit]
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MiB per-file limit enforced by the API
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -84,6 +93,13 @@ export function EmployeeDocumentsSheet({
   const [fileError, setFileError] = useState<string | null>(null);
   const [docToDelete, setDocToDelete] = useState<DocumentResponse | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentResponse | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewContentType, setPreviewContentType] = useState<string | null>(
+    null
+  );
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: documents = [], isLoading, refetch } = useEmployeeDocuments(
@@ -92,9 +108,71 @@ export function EmployeeDocumentsSheet({
   const uploadMutation = useUploadDocument();
   const deleteMutation = useDeleteDocument();
 
+  // Identity-guarded document types: Aadhaar/PAN uploads are only offered when
+  // the employee actually stored that number; "Other" is always available.
+  const canUploadAadhaar = Boolean(employee?.aadhaarMasked);
+  const canUploadPan = Boolean(employee?.panMasked);
+
+  // Keep the selected type pointing at a doc type this employee can provide.
+  useEffect(() => {
+    if (!employee) return;
+    setSelectedType((prev) => {
+      if (prev === DocumentType.Aadhaar && !employee.aadhaarMasked) {
+        return employee.panMasked ? DocumentType.Pan : DocumentType.Other;
+      }
+      if (prev === DocumentType.Pan && !employee.panMasked) {
+        return employee.aadhaarMasked ? DocumentType.Aadhaar : DocumentType.Other;
+      }
+      return prev;
+    });
+  }, [employee]);
+
+  // Load the selected document into the inline preview viewer (auth Bearer, blob URL).
+  useEffect(() => {
+    if (!previewDoc || !employee) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    setPreviewUrl(null);
+    setPreviewContentType(null);
+    setPreviewError(null);
+    setPreviewLoading(true);
+
+    getDocumentPreviewUrl(employee.id, previewDoc.id)
+      .then(({ url, contentType }) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setPreviewUrl(url);
+        setPreviewContentType(contentType);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error("Failed to load document preview", err);
+        setPreviewError(
+          err instanceof Error
+            ? err.message
+            : "Could not load the document preview."
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [previewDoc, employee]);
+
   if (!employee) return null;
 
   const fullName = `${employee.firstName} ${employee.lastName || ""}`.trim();
+
+  const isPreviewPdf = previewContentType?.includes("pdf") ?? false;
+  const isPreviewImage = previewContentType?.startsWith("image/") ?? false;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -103,7 +181,7 @@ export function EmployeeDocumentsSheet({
     setFileError(null);
 
     if (file.size > MAX_FILE_SIZE) {
-      const msg = `"${file.name}" exceeds the maximum limit of 6 MB.`;
+      const msg = `"${file.name}" exceeds the maximum limit of 5 MB.`;
       setFileError(msg);
       toast.warning("File size limit exceeded", {
         description: msg,
@@ -225,7 +303,6 @@ export function EmployeeDocumentsSheet({
                 <UploadCloud className="size-3.5 text-primary" />
                 Upload Compliance Document
               </span>
-              <span className="text-[10px] text-muted-foreground">Max 6MB</span>
             </div>
 
             <div className="space-y-2.5">
@@ -244,18 +321,31 @@ export function EmployeeDocumentsSheet({
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={4} className="z-[70]">
                     <SelectGroup>
-                      <SelectItem value={String(DocumentType.Aadhaar)}>
-                        {DocumentTypeLabels[DocumentType.Aadhaar]}
-                      </SelectItem>
-                      <SelectItem value={String(DocumentType.Pan)}>
-                        {DocumentTypeLabels[DocumentType.Pan]}
-                      </SelectItem>
+                      {canUploadAadhaar && (
+                        <SelectItem value={String(DocumentType.Aadhaar)}>
+                          {DocumentTypeLabels[DocumentType.Aadhaar]}
+                        </SelectItem>
+                      )}
+                      {canUploadPan && (
+                        <SelectItem value={String(DocumentType.Pan)}>
+                          {DocumentTypeLabels[DocumentType.Pan]}
+                        </SelectItem>
+                      )}
                       <SelectItem value={String(DocumentType.Other)}>
                         {DocumentTypeLabels[DocumentType.Other]}
                       </SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                {(!canUploadAadhaar || !canUploadPan) && (
+                  <p className="text-[11px] text-muted-foreground leading-snug pt-1">
+                    {!canUploadAadhaar && !canUploadPan
+                      ? "Aadhaar & PAN card uploads require the corresponding number saved on the employee profile."
+                      : !canUploadAadhaar
+                        ? "Aadhaar card upload requires an Aadhaar number saved on the employee profile."
+                        : "PAN card upload requires a PAN number saved on the employee profile."}
+                  </p>
+                )}
               </Field>
 
               <div className="pt-1">
@@ -374,19 +464,19 @@ export function EmployeeDocumentsSheet({
                               size="icon"
                               variant="ghost"
                               className="size-7 text-muted-foreground hover:text-foreground cursor-pointer"
-                              aria-label="Download document"
-                              onClick={() => handleDownload(doc)}
+                              aria-label="Preview document"
+                              onClick={() => setPreviewDoc(doc)}
                               disabled={isDownloading || isDeleting}
                             >
                               {isDownloading ? (
                                 <Loader2 className="size-3.5 animate-spin" />
                               ) : (
-                                <Download className="size-3.5" />
+                                <Eye className="size-3.5" />
                               )}
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="top">
-                            <p className="text-xs">Download document</p>
+                            <p className="text-xs">Preview document</p>
                           </TooltipContent>
                         </Tooltip>
 
@@ -420,6 +510,139 @@ export function EmployeeDocumentsSheet({
           </div>
         </div>
       </SheetContent>
+
+      {/* Document Preview Dialog (reui-style dialog): inline viewing with
+          Download & Delete actions available only while previewing */}
+      <Dialog
+        open={Boolean(previewDoc)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPreviewDoc(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-2xl p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-[70] overflow-hidden"
+        >
+          {previewDoc && (
+            <>
+              {/* Header with the same rose theme accent as the sheet */}
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="size-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                    <FileText className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <DialogTitle
+                      className="text-xs sm:text-sm font-semibold text-foreground truncate leading-tight"
+                      title={previewDoc.fileName}
+                    >
+                      {previewDoc.fileName}
+                    </DialogTitle>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] py-0 px-1.5 h-4 font-normal"
+                      >
+                        {DocumentTypeLabels[previewDoc.documentType] ||
+                          "Document"}
+                      </Badge>
+                      <span>{formatFileSize(previewDoc.sizeBytes)}</span>
+                    </div>
+                  </div>
+                </div>
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-7 rounded-md text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                    aria-label="Close preview"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </DialogClose>
+              </div>
+
+              {/* Inline Viewer: PDF in an iframe, images via img, other types get a download hint */}
+              <div className="h-[60vh] sm:h-[65vh] bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
+                {previewLoading && (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground text-xs">
+                    <Loader2 className="size-6 animate-spin text-primary" />
+                    Loading preview...
+                  </div>
+                )}
+                {!previewLoading && previewError && (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground text-xs px-6 text-center">
+                    <AlertCircle className="size-6 text-destructive" />
+                    <p>{previewError}</p>
+                  </div>
+                )}
+                {!previewLoading && !previewError && previewUrl && isPreviewPdf && (
+                  <iframe
+                    src={previewUrl}
+                    title={previewDoc.fileName}
+                    className="w-full h-full border-0"
+                  />
+                )}
+                {!previewLoading &&
+                  !previewError &&
+                  previewUrl &&
+                  isPreviewImage && (
+                    <img
+                      src={previewUrl}
+                      alt={previewDoc.fileName}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  )}
+                {!previewLoading &&
+                  !previewError &&
+                  previewUrl &&
+                  !isPreviewPdf &&
+                  !isPreviewImage && (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground text-xs text-center px-6">
+                      <FileText className="size-6" />
+                      <p className="font-medium text-foreground">
+                        Inline preview isn&apos;t available for this file type.
+                      </p>
+                      <p className="text-[10px]">
+                        Use the Download button below to open the document.
+                      </p>
+                    </div>
+                  )}
+              </div>
+
+              {/* Footer: Download & Delete available while previewing */}
+              <DialogFooter className="border-t border-border/60 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="h-8 px-3.5 rounded-full text-xs font-medium border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer shadow-2xs"
+                  onClick={() => handleDownload(previewDoc)}
+                  disabled={downloadingId === previewDoc.id}
+                >
+                  {downloadingId === previewDoc.id ? (
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Download className="size-3.5 mr-1.5" />
+                  )}
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 px-3.5 rounded-full text-xs font-semibold cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/90 dark:bg-rose-950/60 dark:hover:bg-rose-950/90 dark:text-rose-400 dark:border-rose-900/70 shadow-2xs transition-colors"
+                  onClick={() => {
+                    const target = previewDoc;
+                    setPreviewDoc(null);
+                    setDocToDelete(target);
+                  }}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="size-3.5 mr-1.5" />
+                  Delete
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Document Deletion Confirmation Dialog - Compact @reui/c-alert-dialog-8 */}
       <AlertDialog

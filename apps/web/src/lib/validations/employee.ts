@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Display mask for the (unreversible) stored password in Edit mode.
+// Never sent to the API — typed-over values replace the password instead.
+export const STORED_PASSWORD_MASK = "••••••••";
+
 export const employeeSchema = z.object({
   firstName: z
     .string()
@@ -42,14 +46,43 @@ export const employeeSchema = z.object({
   aadhaarNumber: z
     .string()
     .trim()
-    .regex(/^[2-9]\d{11}$/, "Enter a valid 12-digit Aadhaar number")
+    .regex(/^[2-9]\d{11}$|^\d{4}$/, "Enter a valid 12-digit Aadhaar number")
     .or(z.literal(""))
     .optional(),
   department: z.string().min(1, "Department is required"),
-  salary: z.coerce
-    .number()
-    .min(0, "Salary cannot be negative")
-    .max(100000000, "Salary exceeds maximum"),
+  salary: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce
+      .number()
+      .min(0, "Salary cannot be negative")
+      .max(100000000, "Salary exceeds maximum")
+      .optional()
+  ),
+  credentialsEnabled: z.boolean().optional(),
+  credentialsUsername: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters")
+    .max(50, "Username cannot exceed 50 characters")
+    .or(z.literal(""))
+    .optional(),
+  credentialsPassword: z
+    .string()
+    .min(8, "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.")
+    .regex(/[A-Z]/, "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.")
+    .regex(/[a-z]/, "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.")
+    .regex(/[0-9]/, "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.")
+    .regex(/[^A-Za-z0-9]/, "At least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.")
+    .or(z.literal(""))
+    .optional(),
+  credentialsConfirmPassword: z
+    .string()
+    .max(50, "Confirm password cannot exceed 50 characters")
+    .optional(),
+  // Edit-mode optional login update: blank means "keep current".
+  loginUsername: z.string().trim().optional().or(z.literal("")),
+  loginPassword: z.string().optional().or(z.literal("")),
+  loginConfirmPassword: z.string().optional().or(z.literal("")),
   dateOfJoining: z
     .string()
     .min(1, "Date of joining is required")
@@ -60,7 +93,70 @@ export const employeeSchema = z.object({
       today.setHours(23, 59, 59, 999);
       return selected <= today;
     }, "Date of joining cannot be in the future"),
-});
+  })
+  .superRefine((data, ctx) => {
+    // Login credential fields (Register mode) are only enforced when the admin opts in.
+    if (data.credentialsEnabled) {
+      if (!data.credentialsUsername) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["credentialsUsername"],
+          message: "Username is required",
+        });
+      }
+      if (!data.credentialsPassword) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["credentialsPassword"],
+          message: "Password is required",
+        });
+      }
+      if (data.credentialsConfirmPassword !== data.credentialsPassword) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["credentialsConfirmPassword"],
+          message: "Passwords do not match",
+        });
+      }
+    }
+
+    // Edit-mode optional login update: validate only what was actually typed.
+    const newUsername = data.loginUsername?.trim() ?? "";
+    const newPassword = data.loginPassword ?? "";
+    const confirmNewPassword = data.loginConfirmPassword ?? "";
+
+    if (newUsername && !/^[a-zA-Z0-9_.-]{3,50}$/.test(newUsername)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["loginUsername"],
+        message:
+          "Username must be 3-50 characters (letters, numbers, dot, underscore or hyphen).",
+      });
+    }
+
+    if (newPassword && newPassword !== STORED_PASSWORD_MASK) {
+      if (
+        newPassword.length < 8 ||
+        !/[A-Z]/.test(newPassword) ||
+        !/[a-z]/.test(newPassword) ||
+        !/[0-9]/.test(newPassword) ||
+        !/[^A-Za-z0-9]/.test(newPassword)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["loginPassword"],
+          message:
+            "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.",
+        });
+      } else if (confirmNewPassword !== newPassword) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["loginConfirmPassword"],
+          message: "Passwords do not match",
+        });
+      }
+    }
+  });
 
 export type EmployeeFormData = z.infer<typeof employeeSchema>;
 

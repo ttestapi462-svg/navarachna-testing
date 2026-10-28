@@ -53,7 +53,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
-  Copy,
+  ShieldOff,
 } from "lucide-react";
 
 interface EmployeeDataGridProps {
@@ -61,6 +61,7 @@ interface EmployeeDataGridProps {
   onEditEmployee: (employee: EmployeeResponse) => void;
   onViewDocuments: (employee: EmployeeResponse) => void;
   onDeleteEmployee: (employee: EmployeeResponse) => void;
+  onRemoveLogin: (employee: EmployeeResponse) => void;
 }
 
 // Deterministic pastel avatar background & text colors matching reference
@@ -86,6 +87,7 @@ function EmployeeDataGridComponent({
   onEditEmployee,
   onViewDocuments,
   onDeleteEmployee,
+  onRemoveLogin,
 }: EmployeeDataGridProps) {
   // ─── Filter & Search States ─────────────────────────────
   const [searchInput, setSearchInput] = useState("");
@@ -322,44 +324,87 @@ function EmployeeDataGridComponent({
         enableSorting: true,
       },
       {
-        id: "documents",
+        accessorKey: "updatedAt",
+        id: "updatedAt",
         header: ({ column }) => (
           <DataGridColumnHeader
             column={column}
-            title="Audit Docs"
+            title="Updated At"
             className="text-xs font-semibold text-foreground/80"
           />
         ),
         cell: ({ row }) => {
           const emp = row.original;
-          const count = emp.documents?.length ?? 0;
+          const raw = emp.updatedAt ?? emp.createdAt;
+          const d = new Date(raw);
           return (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onViewDocuments(emp);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/50 border border-rose-200/60 dark:border-rose-900/40 cursor-pointer transition-colors"
-                >
-                  <FileText className="size-2.5 text-rose-500" />
-                  <span>
-                    {count} {count === 1 ? "Doc" : "Docs"}
-                  </span>
-                </button>
+                <span className="text-xs text-muted-foreground whitespace-nowrap cursor-default">
+                  {isNaN(d.getTime())
+                    ? "—"
+                    : d.toLocaleString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      })}
+                </span>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs">Manage uploaded documents</p>
+                <p className="text-xs">
+                  {emp.updatedAt
+                    ? "Last updated timestamp"
+                    : "No updates yet — showing created timestamp"}
+                </p>
               </TooltipContent>
             </Tooltip>
           );
         },
         meta: {
-          skeleton: <Skeleton className="h-5 w-12 rounded-md" />,
+          skeleton: <Skeleton className="h-3.5 w-24 rounded-md" />,
+        },
+        size: 150,
+        enableSorting: false,
+      },
+      {
+        accessorKey: "updatedBy",
+        id: "updatedBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            column={column}
+            title="Updated By"
+            className="text-xs font-semibold text-foreground/80"
+          />
+        ),
+        cell: ({ row }) => {
+          const emp = row.original;
+          const actor = emp.updatedBy ?? emp.createdBy;
+          const actorName = emp.updatedByUsername ?? emp.createdByUsername;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs text-foreground/90 cursor-default block max-w-[120px] truncate">
+                  {actorName ?? (actor != null ? `#${actor}` : "—")}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {emp.updatedBy != null
+                    ? `Last updated by ${actorName ?? `#${emp.updatedBy}`}`
+                    : "No updates yet — showing created by"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
+        meta: {
+          skeleton: <Skeleton className="h-3.5 w-10 rounded-md" />,
         },
         size: 95,
+        enableSorting: false,
       },
       {
         id: "actions",
@@ -411,16 +456,11 @@ function EmployeeDataGridComponent({
                     <span>Documents</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => {
-                      navigator.clipboard.writeText(emp.email);
-                      toast.info("Copied to clipboard", {
-                        description: `Copied ${emp.email}`,
-                      });
-                    }}
+                    onClick={() => onRemoveLogin(emp)}
                     className="text-xs gap-2 py-1.5 cursor-pointer"
                   >
-                    <Copy className="size-3.5 text-muted-foreground" />
-                    <span>Copy Email</span>
+                    <ShieldOff className="size-3.5 text-muted-foreground" />
+                    <span>Remove Login</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -442,7 +482,7 @@ function EmployeeDataGridComponent({
         size: 60,
       },
     ],
-    [onEditEmployee, onViewDocuments, onDeleteEmployee]
+    [onEditEmployee, onViewDocuments, onDeleteEmployee, onRemoveLogin]
   );
 
   // TanStack table instance (@reui/c-data-grid-5 configuration)

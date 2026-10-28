@@ -95,6 +95,27 @@ export function useDeleteEmployee() {
   });
 }
 
+// ─── Remove Employee Login ───────────────────────────────
+// True when the employee currently has a usable login account.
+export async function getEmployeeLoginStatus(
+  employeeId: number
+): Promise<{ hasLogin: boolean }> {
+  return apiClient<{ hasLogin: boolean }>(
+    `/api/v1/employees/${employeeId}/login`
+  );
+}
+
+export function useRemoveEmployeeLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient(`/api/v1/employees/${id}/login`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: employeeKeys.lists() });
+    },
+  });
+}
+
 // ─── Documents ───────────────────────────────────────────
 export function useEmployeeDocuments(employeeId: number | null) {
   return useQuery({
@@ -171,6 +192,24 @@ export function useDeleteDocument() {
       qc.invalidateQueries({ queryKey: employeeKeys.lists() });
     },
   });
+}
+
+export async function getDocumentPreviewUrl(
+  employeeId: number,
+  docId: number
+): Promise<{ url: string; contentType: string }> {
+  const token = getStoredToken();
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/employees/${employeeId}/documents/${docId}/download`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+
+  if (!res.ok) throw new Error("Preview failed");
+
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), contentType: blob.type };
 }
 
 export async function downloadDocument(
