@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { Layers } from "lucide-react-native";
+import { StudioLogoIcon } from "../brand/StudioLogo";
 import { HEADER_BAR_HEIGHT } from "../../constants/layout";
 
 export interface AtelierHeaderProps {
@@ -56,7 +56,7 @@ export function AtelierHeader({
           {/* Left: Brand Crest & Studio Title */}
           <View style={styles.brandContainer}>
             <View style={styles.logoTile}>
-              <Layers size={19} color="#ffffff" strokeWidth={2.3} />
+              <StudioLogoIcon size={26} />
             </View>
             <Text style={styles.brandTitle} numberOfLines={1}>
               {title}
@@ -108,20 +108,20 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: "#e11d48", // Brand Rose crest
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.95)",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#fecdd6",
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
       ios: {
-        shadowColor: "#e11d48",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.25,
-        shadowRadius: 6,
+        shadowColor: "#9e1b38",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
       },
       default: {
-        boxShadow: "0 3px 8px rgba(225, 29, 72, 0.22)",
+        boxShadow: "0 2px 6px rgba(158, 27, 56, 0.12)",
       },
     }),
   },

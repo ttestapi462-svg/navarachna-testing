@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Navarachna.Api.Common;
 using Navarachna.Api.Entities;
+using EmployeeApi.Models;
 
 namespace Navarachna.Api.Data;
 
@@ -12,6 +13,8 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserToken> UserTokens => Set<UserToken>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeDocument> EmployeeDocuments => Set<EmployeeDocument>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -104,5 +107,33 @@ public class AppDbContext : DbContext
             entity.HasIndex(t => t.RefreshToken).IsUnique();
             entity.HasIndex(t => new { t.UserId, t.SessionId }).HasDatabaseName("idx_tbl_user_tokens_user_session");
         });
+
+        // Employee Management entities integrated into the original authentication DbContext.
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.ToTable("Employees");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.Property(e => e.Salary).HasPrecision(12, 2);
+            entity.Property(e => e.AadhaarNumber).HasColumnName("AadhaarNumber");
+            entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt").HasDefaultValueSql("clock_timestamp()");
+            entity.Property(e => e.CreatedBy).HasColumnName("CreatedBy");
+            entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt");
+            entity.Property(e => e.UpdatedBy).HasColumnName("UpdatedBy");
+            entity.Property(e => e.Version).HasColumnName("xmin").HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            entity.HasQueryFilter(e => e.IsActive);
+        });
+
+        modelBuilder.Entity<EmployeeDocument>(entity =>
+        {
+            entity.ToTable("EmployeeDocuments");
+            entity.Property(d => d.DocumentType).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(d => new { d.EmployeeId, d.DocumentType }).IsUnique();
+            entity.HasOne(d => d.Employee).WithMany(e => e.Documents)
+                .HasForeignKey(d => d.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(d => d.Employee.IsActive);
+        });
+
     }
 }

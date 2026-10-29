@@ -15,13 +15,13 @@ import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Layers,
   User,
   Lock,
   Eye,
   EyeOff,
   AlertCircle,
 } from "lucide-react-native";
+import { StudioBrandMark } from "../../components/brand/StudioLogo";
 import { mobileApiClient, setAuthTokens, MobileApiError } from "../../lib/api-client";
 
 export default function MobileLoginScreen() {
@@ -150,51 +150,20 @@ export default function MobileLoginScreen() {
         className="flex-1"
       >
         <View style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}>
-          {/* Atelier Brand Monogram Header */}
+          {/* Atelier Brand Header */}
           <View style={{ alignItems: "center", marginBottom: isKeyboardVisible ? 16 : 28 }}>
-            <View
-              style={{
-                width: isKeyboardVisible ? 52 : 64,
-                height: isKeyboardVisible ? 52 : 64,
-                borderRadius: isKeyboardVisible ? 16 : 20,
-                backgroundColor: "#ffffff",
-                borderWidth: 1,
-                borderColor: "#fecdd3",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 10,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 2,
-                elevation: 1,
-              }}
-            >
-              <Layers
-                size={isKeyboardVisible ? 26 : 32}
-                color="#e11d48"
-                strokeWidth={2}
-              />
-            </View>
+            <StudioBrandMark
+              variant="stacked"
+              height={isKeyboardVisible ? 75 : 115}
+            />
             <Text
               style={{
-                fontSize: isKeyboardVisible ? 20 : 24,
-                fontWeight: "800",
-                color: "#0f172a",
-                textAlign: "center",
-                letterSpacing: -0.5,
-              }}
-            >
-              Navarachna Studio
-            </Text>
-            <Text
-              style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: "700",
-                color: "#e11d48",
+                color: "#80142c",
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                marginTop: 4,
+                marginTop: 10,
                 textAlign: "center",
               }}
             >
@@ -232,7 +201,7 @@ export default function MobileLoginScreen() {
                   marginBottom: 18,
                 }}
               >
-                <AlertCircle size={18} color="#e11d48" strokeWidth={2} />
+                <AlertCircle size={18} color="#9E1B38" strokeWidth={2} />
                 <Text
                   style={{
                     fontSize: 13,
@@ -268,13 +237,13 @@ export default function MobileLoginScreen() {
                   borderRadius: 14,
                   paddingHorizontal: 14,
                   borderWidth: focusedField === "identifier" ? 1.5 : 1,
-                  borderColor: focusedField === "identifier" ? "#e11d48" : "#e2e8f0",
+                  borderColor: focusedField === "identifier" ? "#9E1B38" : "#e2e8f0",
                   backgroundColor: focusedField === "identifier" ? "#ffffff" : "#f8fafc",
                 }}
               >
                 <User
                   size={20}
-                  color={focusedField === "identifier" ? "#e11d48" : "#94a3b8"}
+                  color={focusedField === "identifier" ? "#9E1B38" : "#94a3b8"}
                   strokeWidth={focusedField === "identifier" ? 2.5 : 2}
                 />
                 <TextInput
@@ -319,13 +288,13 @@ export default function MobileLoginScreen() {
                   borderRadius: 14,
                   paddingHorizontal: 14,
                   borderWidth: focusedField === "password" ? 1.5 : 1,
-                  borderColor: focusedField === "password" ? "#e11d48" : "#e2e8f0",
+                  borderColor: focusedField === "password" ? "#9E1B38" : "#e2e8f0",
                   backgroundColor: focusedField === "password" ? "#ffffff" : "#f8fafc",
                 }}
               >
                 <Lock
                   size={20}
-                  color={focusedField === "password" ? "#e11d48" : "#94a3b8"}
+                  color={focusedField === "password" ? "#9E1B38" : "#94a3b8"}
                   strokeWidth={focusedField === "password" ? 2.5 : 2}
                 />
                 <TextInput
@@ -369,12 +338,12 @@ export default function MobileLoginScreen() {
               activeOpacity={0.85}
               style={{
                 height: 52,
-                backgroundColor: loading ? "#f43f5e" : "#e11d48",
+                backgroundColor: loading ? "#BE185D" : "#9E1B38",
                 borderRadius: 14,
                 alignItems: "center",
                 justifyContent: "center",
                 flexDirection: "row",
-                shadowColor: "#e11d48",
+                shadowColor: "#9E1B38",
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using EmployeeApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -13,6 +14,7 @@ using Navarachna.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Exception Handling & ProblemDetails
+builder.Services.AddExceptionHandler<EmployeeApi.Infrastructure.GlobalExceptionHandler>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
@@ -23,12 +25,34 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddHostedService<TokenCleanupWorker>();
 
+// Employee Management services; authentication remains the original Navarachna implementation.
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<DocumentService>();
+
+var storageProvider = builder.Configuration["Storage:Provider"];
+var hasBlobCredentials = !string.IsNullOrWhiteSpace(builder.Configuration["Storage:Blob:ConnectionString"]) 
+    || !string.IsNullOrWhiteSpace(builder.Configuration["Storage:Blob:AccountUrl"]);
+
+if (string.Equals(storageProvider, "Blob", StringComparison.OrdinalIgnoreCase))
+{
+    if (!hasBlobCredentials)
+    {
+        throw new InvalidOperationException(
+            "Storage:Provider is set to 'Blob', but neither Storage:Blob:ConnectionString nor Storage:Blob:AccountUrl is configured in appsettings.json or environment variables.");
+    }
+    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+}
+else
+{
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+}
+
 // 3. Add Controllers
 builder.Services.AddControllers();
 
 // 4. Database Context with Npgsql Resilience
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? "Host=localhost;Port=5432;Database=navarachna_studio;Username=postgres;Password=postgres";
+    ?? "Host=navarachana-db.postgres.database.azure.com;Port=5432;Database=navarachana_designer_studio;Username=Navarachna;Password=password@123";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -226,6 +250,31 @@ using (var scope = app.Services.CreateScope())
             await dbContext.Database.ExecuteSqlRawAsync(sql);
             logger.LogInformation("Database audit columns (created_by, updated_by, updated_at), indexes, triggers, and admin seed applied successfully.");
         }
+
+        // Seamless migration: rename AadhaarLast4 to AadhaarNumber, and add audit columns (CreatedBy, UpdatedAt, UpdatedBy)
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                      AND table_name = 'Employees' 
+                      AND column_name = 'AadhaarLast4'
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                      AND table_name = 'Employees' 
+                      AND column_name = 'AadhaarNumber'
+                ) THEN
+                    ALTER TABLE public.""Employees"" RENAME COLUMN ""AadhaarLast4"" TO ""AadhaarNumber"";
+                END IF;
+            END $$;
+
+            ALTER TABLE public.""Employees"" 
+                ADD COLUMN IF NOT EXISTS ""CreatedBy"" bigint,
+                ADD COLUMN IF NOT EXISTS ""UpdatedAt"" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS ""UpdatedBy"" bigint;
+        ");
     }
     catch (Exception ex)
     {
