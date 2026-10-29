@@ -28,7 +28,7 @@ export function SessionSecurityCard({ className }: { className?: string }) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   return (
-    <Card className={cn("rounded-4xl border border-border/70 shadow-sm bg-card", className)}>
+    <Card className={cn("rounded-2xl border border-border/70 shadow-sm bg-card", className)}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base text-foreground">
@@ -97,7 +97,7 @@ export function SessionSecurityCard({ className }: { className?: string }) {
             variant="outline"
             size="sm"
             onClick={refetchAuth}
-            className="flex-1 text-xs rounded-3xl cursor-pointer"
+            className="flex-1 text-xs rounded-xl cursor-pointer"
           >
             <RefreshCw className="h-3 w-3 mr-1.5" /> Refresh State
           </Button>
@@ -105,7 +105,7 @@ export function SessionSecurityCard({ className }: { className?: string }) {
             variant="outline"
             size="sm"
             onClick={() => setShowLogoutDialog(true)}
-            className="flex-1 text-xs rounded-3xl border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
+            className="flex-1 text-xs rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
           >
             <LogOut className="h-3 w-3 mr-1.5" /> End Session
           </Button>

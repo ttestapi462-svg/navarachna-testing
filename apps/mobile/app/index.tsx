@@ -28,7 +28,7 @@ export default function RootEntryScreen() {
           ]) as { isAuthenticated: boolean };
 
           if (check.isAuthenticated) {
-            router.replace("/(tabs)");
+            router.replace("/(tabs)/expense");
           } else {
             await clearAuthTokens();
             router.replace("/(auth)/login");
@@ -40,7 +40,7 @@ export default function RootEntryScreen() {
             router.replace("/(auth)/login");
           } else {
             // Network offline or timeout: allow offline load to tabs
-            router.replace("/(tabs)");
+            router.replace("/(tabs)/expense");
           }
         }
       } catch {

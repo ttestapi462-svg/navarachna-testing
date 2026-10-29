@@ -1,48 +1,80 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Animated,
+  Easing,
+  Platform,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
   useWindowDimensions,
-  Animated,
-  Platform,
-  Easing,
+  View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LayoutDashboard, ShoppingBag, Users, Receipt, MoreHorizontal } from "lucide-react-native";
 import {
-  getTabBarHeight,
-  BAR_BASE_HEIGHT,
+  LayoutDashboard,
+  MoreHorizontal,
+  Receipt,
+  ShoppingBag,
+  Users,
+} from "lucide-react-native";
+import {
   BUBBLE_SIZE,
+  getTabBarHeight,
 } from "../../constants/layout";
-import { QuickActionDrawer } from "./quick-action-drawer";
+
+export type MobileTabRoute =
+  | "index"
+  | "orders"
+  | "customer"
+  | "expense"
+  | "more";
 
 export interface CurvedBottomNavBarProps {
-  activeTab: number; // 0: Dashboard, 1: Orders, 2: Customer, 3: Expense, 4: More
-  onTabSelect: (tabIndex: number) => void;
-  onActionSelect?: (actionId: string) => void;
-  onPressFab?: () => void;
-  isFabOpen?: boolean;
+  activeRoute: string;
+  safeAreaBottom: number;
+  onTabSelect: (routeName: MobileTabRoute) => void;
 }
 
-const TABS = [
-  { id: 0, label: "Dashboard", icon: LayoutDashboard },
-  { id: 1, label: "Orders", icon: ShoppingBag },
-  { id: 2, label: "Customer", icon: Users },
-  { id: 3, label: "Expense", icon: Receipt },
-  { id: 4, label: "More", icon: MoreHorizontal },
+export const NAV_TABS: Array<{
+  route: MobileTabRoute;
+  label: string;
+  icon: any;
+}> = [
+  { route: "index", label: "Dashboard", icon: LayoutDashboard },
+  { route: "orders", label: "Orders", icon: ShoppingBag },
+  { route: "customer", label: "Customer", icon: Users },
+  { route: "expense", label: "Expense", icon: Receipt },
+  { route: "more", label: "More", icon: MoreHorizontal },
 ];
 
-const BUBBLE_RADIUS = BUBBLE_SIZE / 2; // 24
-const ANIM_DURATION = 400; // ms
-const HEADROOM = 13; // Low-profile top elevation zone for decreased panel height
-const SCOOP_DEPTH = 42; // Proportional 42px scoop valley depth for 48px ball
+const SLOT_COUNT = 5;
+const TAB_ROW_HEIGHT = 40;
+const BUBBLE_RADIUS = BUBBLE_SIZE / 2;
+const HEADROOM = 13;
+const SCOOP_DEPTH = 38;
+
+function getActiveTabIndex(pathname: string): number {
+  const clean = (pathname || "").split("?")[0].replace(/\/$/, "");
+  if (
+    clean === "" ||
+    clean === "/" ||
+    clean.endsWith("/(tabs)") ||
+    clean.endsWith("/index")
+  ) {
+    return 0; // Dashboard
+  }
+  if (clean.endsWith("/orders")) return 1;
+  if (clean.endsWith("/customer")) return 2;
+  if (clean.endsWith("/expense")) return 3;
+  if (clean.endsWith("/more") || clean.includes("/more/")) {
+    return 4; // More tab and its sub-pages
+  }
+  return -1;
+}
 
 /**
- * Exact mathematical recreation of Flutter's NavCustomPainter:
- * https://github.com/rafalbednarczuk/curved_navigation_bar/blob/master/lib/src/nav_custom_painter.dart
+ * Mathematical recreation of curved navigation bar notch:
+ * Dips in a smooth rounded "U" slope on both sides of the active tab.
  */
 function getFlutterNavPath(
   pos: number,
@@ -70,294 +102,245 @@ function getFlutterNavPath(
   const endX = (loc + s + 0.1) * width;
 
   return [
-    `M 0 0`,
+    "M 0 0",
     `L ${Math.max(0, startX).toFixed(2)} 0`,
     `C ${cp1X.toFixed(2)} ${cp1Y.toFixed(2)}, ${cp2X.toFixed(2)} ${cp2Y.toFixed(2)}, ${midX.toFixed(2)} ${midY.toFixed(2)}`,
     `C ${cp3X.toFixed(2)} ${cp3Y.toFixed(2)}, ${cp4X.toFixed(2)} ${cp4Y.toFixed(2)}, ${Math.min(width, endX).toFixed(2)} 0`,
     `L ${width.toFixed(2)} 0`,
     `L ${width.toFixed(2)} ${height.toFixed(2)}`,
     `L 0 ${height.toFixed(2)}`,
-    `Z`,
+    "Z",
+  ].join(" ");
+}
+
+function getFlutterNavScoopPath(
+  pos: number,
+  itemsLength: number,
+  width: number,
+  scoopDepth: number = SCOOP_DEPTH
+): string {
+  const span = 1.0 / itemsLength;
+  const s = 0.2;
+  const loc = pos + (span - s) / 2;
+  const startX = (loc - 0.1) * width;
+  const cp1X = (loc + s * 0.2) * width;
+  const cp1Y = scoopDepth * 0.08;
+  const cp2X = loc * width;
+  const cp2Y = scoopDepth;
+  const midX = (loc + s * 0.5) * width;
+  const midY = scoopDepth;
+  const cp3X = (loc + s) * width;
+  const cp4X = (loc + s - s * 0.2) * width;
+  const cp4Y = scoopDepth * 0.08;
+  const endX = (loc + s + 0.1) * width;
+
+  return [
+    `M ${startX.toFixed(2)} 0`,
+    `C ${cp1X.toFixed(2)} ${cp1Y.toFixed(2)}, ${cp2X.toFixed(2)} ${cp2Y.toFixed(2)}, ${midX.toFixed(2)} ${midY.toFixed(2)}`,
+    `C ${cp3X.toFixed(2)} ${scoopDepth.toFixed(2)}, ${cp4X.toFixed(2)} ${cp4Y.toFixed(2)}, ${endX.toFixed(2)} 0`,
+    "Z",
   ].join(" ");
 }
 
 export function CurvedBottomNavBar({
-  activeTab,
+  activeRoute,
+  safeAreaBottom,
   onTabSelect,
-  onActionSelect,
-  onPressFab,
-  isFabOpen: externalIsFabOpen,
 }: CurvedBottomNavBarProps) {
   const { width: windowWidth } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const barHeight = getTabBarHeight(insets.bottom);
-
-  // Full-width bar, centered on wide viewports (matching Flutter maxWidth)
+  const barHeight = getTabBarHeight(safeAreaBottom);
+  const tabRowTop = HEADROOM + Math.max(0, safeAreaBottom - 12);
   const barWidth = Math.min(windowWidth, 440);
-  const itemsLength = TABS.length;
-  const slotWidth = barWidth / itemsLength;
+  const slotWidth = barWidth / SLOT_COUNT;
 
-  const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
-  const isDrawerOpen =
-    externalIsFabOpen !== undefined ? externalIsFabOpen : internalDrawerOpen;
-  const toggleDrawer = onPressFab || (() => setInternalDrawerOpen((prev) => !prev));
+  const activeIndex = getActiveTabIndex(activeRoute);
+  const isRaised = activeIndex >= 0;
 
-  // Normalized position: ranges from 0.0 to (itemsLength - 1) / itemsLength
-  // exactly matching Flutter's _pos variable in curved_navigation_bar.dart
-  const initialPos = activeTab / itemsLength;
+  const initialPos = isRaised ? activeIndex / SLOT_COUNT : 0;
   const [posValue, setPosValue] = useState(initialPos);
+  const [depthValue, setDepthValue] = useState(isRaised ? SCOOP_DEPTH : 0);
+
   const posAnim = useRef(new Animated.Value(initialPos)).current;
+  const depthAnim = useRef(
+    new Animated.Value(isRaised ? SCOOP_DEPTH : 0)
+  ).current;
+  const bubbleScale = useRef(new Animated.Value(isRaised ? 1 : 0)).current;
 
-  // Vertical submarine dive & surface physics (matching Flutter's _buttonHide formula)
-  const bubbleDiveAnim = useRef(new Animated.Value(0)).current;
-
-  // Icon morph scale bounce
-  const bubbleIconScale = useRef(new Animated.Value(1)).current;
-  const [displayedIconIndex, setDisplayedIconIndex] = useState(activeTab);
-  const isFirstRender = useRef(true);
-
-  // Frame listener driving the pure SVG path in real-time at 60 FPS
+  // Frame listener driving the SVG notch path smoothly across tabs
   useEffect(() => {
-    const listenerId = posAnim.addListener(({ value }) => {
-      setPosValue(value);
-    });
+    const l1 = posAnim.addListener(({ value }) => setPosValue(value));
+    const l2 = depthAnim.addListener(({ value }) => setDepthValue(value));
     return () => {
-      posAnim.removeListener(listenerId);
+      posAnim.removeListener(l1);
+      depthAnim.removeListener(l2);
     };
-  }, [posAnim]);
+  }, [posAnim, depthAnim]);
 
   useEffect(() => {
-    const targetPos = activeTab / itemsLength;
-
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      posAnim.setValue(targetPos);
-      setPosValue(targetPos);
-      return;
+    if (isRaised) {
+      Animated.parallel([
+        Animated.timing(posAnim, {
+          toValue: activeIndex / SLOT_COUNT,
+          duration: 260,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(depthAnim, {
+          toValue: SCOOP_DEPTH,
+          duration: 220,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(bubbleScale, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    } else {
+      // If More menu root is open (not raised), smoothly flatten the notch and hide bubble
+      Animated.parallel([
+        Animated.timing(depthAnim, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(bubbleScale, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
     }
+  }, [activeIndex, isRaised]);
 
-    // 1. Horizontal glide: notch & bubble slide smoothly across the bar (Flutter easeInOut)
-    Animated.timing(posAnim, {
-      toValue: targetPos,
-      duration: ANIM_DURATION,
-      easing: Easing.bezier(0.42, 0.0, 0.58, 1.0),
-      useNativeDriver: false,
-    }).start();
-
-    // 2. Submarine dive & surface physics (Flutter _buttonHide formula)
-    Animated.sequence([
-      // A. Submerge down into the scoop
-      Animated.timing(bubbleDiveAnim, {
-        toValue: 1,
-        duration: ANIM_DURATION * 0.48,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: false,
-      }),
-      // B. Surface back up and pop into resting nestled position
-      Animated.timing(bubbleDiveAnim, {
-        toValue: 0,
-        duration: ANIM_DURATION * 0.52,
-        easing: Easing.out(Easing.back(1.4)),
-        useNativeDriver: false,
-      }),
-    ]).start();
-
-    // 3. Icon morph scale bounce inside the floating bubble
-    Animated.sequence([
-      Animated.timing(bubbleIconScale, {
-        toValue: 0.35,
-        duration: ANIM_DURATION * 0.4,
-        useNativeDriver: false,
-      }),
-      Animated.timing(bubbleIconScale, {
-        toValue: 1.0,
-        duration: ANIM_DURATION * 0.6,
-        easing: Easing.out(Easing.back(1.5)),
-        useNativeDriver: false,
-      }),
-    ]).start();
-
-    const timer = setTimeout(() => {
-      setDisplayedIconIndex(activeTab);
-    }, ANIM_DURATION * 0.48);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, barWidth, itemsLength]);
-
-  // Pure SVG Nav Bar Path (exact Flutter NavCustomPainter)
   const barPath = getFlutterNavPath(
     posValue,
-    itemsLength,
+    SLOT_COUNT,
     barWidth,
     barHeight,
-    SCOOP_DEPTH
+    depthValue
+  );
+  const scoopPath = getFlutterNavScoopPath(
+    posValue,
+    SLOT_COUNT,
+    barWidth,
+    depthValue
   );
 
-  // Horizontal translation for the active circular bubble
-  // Tracks exactly with posAnim: slotWidth * pos * itemsLength + (slotWidth / 2 - BUBBLE_RADIUS)
-  const bubbleTranslateX = posAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [
-      slotWidth / 2 - BUBBLE_RADIUS,
-      barWidth + slotWidth / 2 - BUBBLE_RADIUS,
-    ],
-  });
-
-  // Vertical dive translation: 0 = resting nestled, 1 = submerged behind the bar
-  const bubbleTranslateY = bubbleDiveAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 34],
-  });
-
-  const ActiveIcon = TABS[displayedIconIndex]?.icon || LayoutDashboard;
+  // Center of active bubble cradle
+  const bubbleLeft =
+    posValue * barWidth + slotWidth / 2 - BUBBLE_RADIUS;
+  const ActiveIcon = isRaised ? NAV_TABS[activeIndex]?.icon : null;
+  const activeLabel = isRaised ? NAV_TABS[activeIndex]?.label : "";
 
   return (
-    <>
+    <View
+      pointerEvents="box-none"
+      style={[styles.container, { height: barHeight + HEADROOM }]}
+    >
       <View
         pointerEvents="box-none"
         style={[
-          styles.container,
-          {
-            height: barHeight + HEADROOM,
-          },
+          styles.barWrapper,
+          { width: barWidth, height: barHeight + HEADROOM },
         ]}
       >
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.barWrapper,
-            {
-              width: barWidth,
-              height: barHeight + HEADROOM,
-            },
-          ]}
+        {/* Curved Notch SVG Bar */}
+        <Svg
+          width={barWidth}
+          height={barHeight}
+          viewBox={`0 0 ${barWidth} ${barHeight}`}
+          style={styles.svgBar}
+          pointerEvents="none"
         >
-          {/* ========================================================= */}
-          {/* LAYER 1: Deeply Nestled Floating Bubble (Active Tab)      */}
-          {/* In Flutter, the button is placed first in the Stack so it */}
-          {/* cleanly dives BEHIND the solid bar during transitions.    */}
-          {/* ========================================================= */}
+          <Path d={scoopPath} fill="#F7F7FB" />
+          <Path d={barPath} fill="#e11d48" />
+        </Svg>
+
+        {/* Floating Raised Circular Action Button */}
+        {ActiveIcon && (
           <Animated.View
-            pointerEvents="box-none"
             style={[
               styles.bubbleContainer,
               {
-                transform: [
-                  {
-                    translateX: bubbleTranslateX,
-                  },
-                  {
-                    translateY: bubbleTranslateY,
-                  },
-                ],
+                left: bubbleLeft,
+                transform: [{ scale: bubbleScale }],
               },
             ]}
           >
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={toggleDrawer}
+              onPress={() => onTabSelect(NAV_TABS[activeIndex].route)}
+              accessibilityRole="button"
+              accessibilityLabel={activeLabel}
+              aria-current="page"
               style={styles.bubbleCircle}
-              accessibilityLabel={`${TABS[activeTab]?.label} active. Tap for shortcuts.`}
             >
-              <Animated.View
-                style={{
-                  transform: [{ scale: bubbleIconScale }],
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ActiveIcon size={22} color="#ffffff" strokeWidth={2.4} />
-              </Animated.View>
+              <ActiveIcon size={22} color="#ffffff" strokeWidth={2.4} />
             </TouchableOpacity>
           </Animated.View>
+        )}
 
-          {/* ========================================================= */}
-          {/* LAYER 2: Pure SVG Monolithic Bar Background               */}
-          {/* Exact Flutter NavCustomPainter path filled with Rose.     */}
-          {/* ========================================================= */}
-          <Svg
-            width={barWidth}
-            height={barHeight}
-            viewBox={`0 0 ${barWidth} ${barHeight}`}
-            style={styles.svgBar}
-            pointerEvents="none"
-          >
-            <Path d={barPath} fill="#e11d48" />
-          </Svg>
-
-          {/* ========================================================= */}
-          {/* LAYER 3: Dynamic Resting Tab Buttons (Flutter NavButton)  */}
-          {/* Dynamically ducks down & fades out when notch approaches. */}
-          {/* Anchored to top active zone above system navigation insets.*/}
-          {/* ========================================================= */}
-          <View
-            style={[
-              styles.tabsRow,
-              {
-                top: HEADROOM,
-                height: BAR_BASE_HEIGHT,
-                width: barWidth,
-              },
-            ]}
-          >
-            {TABS.map((tab, index) => {
-              const Icon = tab.icon;
-              const desiredPos = index / itemsLength;
-              const span = 1.0 / itemsLength;
-
-              // Flutter NavButton: opacity = length * difference
-              const restingOpacity = posAnim.interpolate({
-                inputRange: [desiredPos - span, desiredPos, desiredPos + span],
-                outputRange: [1.0, 0.0, 1.0],
-                extrapolate: "clamp",
-              });
-
-              // Flutter NavButton: verticalAlignment = 1 - length * difference (pushed down)
-              const restingTranslateY = posAnim.interpolate({
-                inputRange: [desiredPos - span, desiredPos, desiredPos + span],
-                outputRange: [0, 16, 0],
-                extrapolate: "clamp",
-              });
-
-              return (
-                <TouchableOpacity
-                  key={tab.id}
-                  onPress={() => onTabSelect(tab.id)}
-                  activeOpacity={0.7}
-                  style={styles.tabItem}
-                  accessibilityLabel={tab.label}
-                >
-                  <Animated.View
-                    style={{
-                      opacity: restingOpacity,
-                      transform: [{ translateY: restingTranslateY }],
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+        {/* Tab Items Row */}
+        <View
+          style={[
+            styles.tabsRow,
+            { top: tabRowTop, height: TAB_ROW_HEIGHT, width: barWidth },
+          ]}
+        >
+          {NAV_TABS.map((tab, idx) => {
+            const Icon = tab.icon;
+            const isTabActive = activeIndex === idx;
+            return (
+              <TouchableOpacity
+                key={tab.route}
+                onPress={() => onTabSelect(tab.route)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isTabActive }}
+                accessibilityLabel={tab.label}
+                aria-current={isTabActive ? "page" : undefined}
+                style={[
+                  styles.tabItem,
+                  { left: slotWidth * idx, width: slotWidth, height: TAB_ROW_HEIGHT },
+                ]}
+              >
+                <View style={styles.tabContent}>
+                  {/* Inactive tab shows icon normally; active tab hides icon (shown in raised circle) */}
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      isTabActive && { opacity: 0 },
+                    ]}
                   >
                     <Icon
                       size={20}
-                      color="rgba(255, 255, 255, 0.94)"
+                      color="#ffffff"
                       strokeWidth={2.15}
                     />
-                    <Text numberOfLines={1} style={styles.tabLabel}>
-                      {tab.label}
-                    </Text>
-                  </Animated.View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  </View>
+
+                  {/* Active tab label is visually hidden (kept in DOM for screen readers) */}
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.tabLabel,
+                      isTabActive && styles.visuallyHiddenLabel,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
-
-      {/* Atelier Floor Quick Action Drawer */}
-      <QuickActionDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setInternalDrawerOpen(false)}
-        onSelectAction={onActionSelect}
-      />
-    </>
+    </View>
   );
 }
 
@@ -368,7 +351,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 40,
-    alignItems: "center", // Center barWrapper on wide screens/desktop web
+    alignItems: "center",
     justifyContent: "flex-end",
   },
   barWrapper: {
@@ -386,47 +369,63 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.12,
         shadowRadius: 6,
       },
-      android: {
-        elevation: 8,
-      },
-      default: {
-        filter: "drop-shadow(0px -3px 6px rgba(0, 0, 0, 0.12))",
-      },
+      android: { elevation: 8 },
+      default: { filter: "drop-shadow(0px -3px 6px rgba(0, 0, 0, 0.12))" },
     }),
   },
   tabsRow: {
     position: "absolute",
-    top: HEADROOM,
     left: 0,
-    height: BAR_BASE_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     zIndex: 46,
   },
   tabItem: {
-    flex: 1,
-    height: BAR_BASE_HEIGHT,
+    position: "absolute",
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 48,
+  },
+  tabContent: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    width: "100%",
+  },
+  iconWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 22,
+    marginBottom: 0,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.92)",
+    letterSpacing: 0.1,
+    textAlign: "center",
+  },
+  visuallyHiddenLabel: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    opacity: 0,
   },
   bubbleContainer: {
     position: "absolute",
-    // Bar top edge starts at y = HEADROOM (13px) in barWrapper; scoop valley reaches y = 13 + 42 = 55px.
-    // Placing top at 1px:
-    // - Top crown rises 12px above the bar top line (y = 1 vs y = 13).
-    // - Bottom of bubble sits at y = 1 + 48 = 49px.
-    // - Bottom space clearance = 55px - 49px = 6px uniform crescent gap cradling the circle.
-    top: 1,
-    left: 0,
+    top: 2,
     width: BUBBLE_SIZE,
     height: BUBBLE_SIZE,
-    zIndex: 35, // Positioned behind the SVG bar so it dives under the bar during transitions
+    zIndex: 50,
   },
   bubbleCircle: {
     width: BUBBLE_SIZE,
     height: BUBBLE_SIZE,
     borderRadius: BUBBLE_RADIUS,
-    backgroundColor: "#e11d48", // Brand Rose
+    backgroundColor: "#e11d48",
     borderWidth: 2.5,
     borderColor: "#ffffff",
     alignItems: "center",
@@ -438,9 +437,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 6,
       },
-      android: {
-        elevation: 10,
-      },
+      android: { elevation: 10 },
       default: {
         shadowColor: "#000000",
         shadowOffset: { width: 0, height: 4 },
@@ -448,12 +445,5 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
       },
     }),
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255, 255, 255, 0.94)",
-    marginTop: 2,
-    letterSpacing: 0.1,
   },
 });

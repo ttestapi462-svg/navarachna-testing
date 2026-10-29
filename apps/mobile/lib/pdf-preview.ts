@@ -1,0 +1,6 @@
+import { pdfJsSource } from "./pdfjs-source";
+import { pdfJsWorkerSource } from "./pdfjs-worker-source";
+
+export function createPdfPreviewHtml(base64: string) {
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#fff}</style></head><body><script>${pdfJsSource}</script><script>(async()=>{try{const workerUrl=URL.createObjectURL(new Blob([${JSON.stringify(pdfJsWorkerSource)}],{type:"application/javascript"}));pdfjsLib.GlobalWorkerOptions.workerSrc=workerUrl;const raw=atob("${base64}");const data=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)data[i]=raw.charCodeAt(i);const pdf=await pdfjsLib.getDocument({data,isEvalSupported:false}).promise;const page=await pdf.getPage(1);const base=page.getViewport({scale:1});const scale=Math.min(2,Math.max(1,window.innerWidth/base.width));const viewport=page.getViewport({scale});const canvas=document.createElement("canvas");const ctx=canvas.getContext("2d");canvas.width=Math.floor(viewport.width);canvas.height=Math.floor(viewport.height);await page.render({canvasContext:ctx,viewport}).promise;window.ReactNativeWebView.postMessage(canvas.toDataURL("image/png"))}catch(e){window.ReactNativeWebView.postMessage(JSON.stringify({error:String(e)}))}})()</script></body></html>`;
+}

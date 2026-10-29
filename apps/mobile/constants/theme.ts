@@ -1,0 +1,32 @@
+export const mobileTheme = {
+  color: {
+    canvas: "#f7f6f3",
+    surface: "#ffffff",
+    surfaceMuted: "#f3f0ed",
+    ink: "#211d1b",
+    text: "#4d4743",
+    muted: "#756d68",
+    subtle: "#958d87",
+    border: "#e7e2dd",
+    borderSoft: "#f0ece8",
+    primary: "#e11d48",
+    primaryDark: "#be123c",
+    primaryTint: "#fff1f2",
+    success: "#15803d",
+    successTint: "#ecfdf5",
+    warning: "#b45309",
+    warningTint: "#fffbeb",
+    info: "#2563eb",
+    infoTint: "#eff6ff",
+  },
+  radius: {
+    card: 18,
+    panel: 14,
+    control: 12,
+    pill: 999,
+  },
+  spacing: {
+    screen: 18,
+    section: 16,
+  },
+} as const;

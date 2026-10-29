@@ -15,14 +15,15 @@ import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  Layers,
   User,
   Lock,
   Eye,
   EyeOff,
   AlertCircle,
 } from "lucide-react-native";
-import { StudioBrandMark } from "../../components/brand/StudioLogo";
 import { mobileApiClient, setAuthTokens, MobileApiError } from "../../lib/api-client";
+import { notifyMobile } from "../../lib/notifications";
 
 export default function MobileLoginScreen() {
   const router = useRouter();
@@ -69,7 +70,9 @@ export default function MobileLoginScreen() {
   const handleLogin = async (forceLogout = false) => {
     Keyboard.dismiss();
     if (!identifier.trim() || !password.trim()) {
-      setErrorMessage("Username or email and password are required.");
+      const message = "Username or email and password are required.";
+      setErrorMessage(message);
+      notifyMobile("validation", message);
       return;
     }
 
@@ -99,9 +102,11 @@ export default function MobileLoginScreen() {
 
       if (response.token) {
         await setAuthTokens(response.token, response.refreshToken);
-        router.replace("/(tabs)");
+        router.replace("/(tabs)/expense");
       } else {
-        setErrorMessage(response.message || "Failed to authenticate.");
+        const message = response.message || "Failed to authenticate.";
+        setErrorMessage(message);
+        notifyMobile("error", message, "Sign in failed");
       }
     } catch (err: unknown) {
       if (err instanceof MobileApiError && err.data?.requiresForceLogout) {
@@ -121,7 +126,9 @@ export default function MobileLoginScreen() {
         );
         return;
       }
-      setErrorMessage(err instanceof Error ? err.message : "Authentication error occurred.");
+      const message = err instanceof Error ? err.message : "Authentication error occurred.";
+      setErrorMessage(message);
+      notifyMobile("error", message, "Sign in failed");
     } finally {
       setLoading(false);
     }
@@ -131,7 +138,7 @@ export default function MobileLoginScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-[#f7f6f3]"
     >
       <StatusBar style="dark" />
       <ScrollView
@@ -150,20 +157,51 @@ export default function MobileLoginScreen() {
         className="flex-1"
       >
         <View style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}>
-          {/* Atelier Brand Header */}
+          {/* Atelier Brand Monogram Header */}
           <View style={{ alignItems: "center", marginBottom: isKeyboardVisible ? 16 : 28 }}>
-            <StudioBrandMark
-              variant="stacked"
-              height={isKeyboardVisible ? 75 : 115}
-            />
+            <View
+              style={{
+                width: isKeyboardVisible ? 52 : 64,
+                height: isKeyboardVisible ? 52 : 64,
+                borderRadius: isKeyboardVisible ? 16 : 20,
+                backgroundColor: "#ffffff",
+                borderWidth: 1,
+                borderColor: "#fecdd3",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 10,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+                elevation: 1,
+              }}
+            >
+              <Layers
+                size={isKeyboardVisible ? 26 : 32}
+                color="#cf0046"
+                strokeWidth={2}
+              />
+            </View>
             <Text
               style={{
-                fontSize: 10,
+                fontSize: isKeyboardVisible ? 20 : 24,
+                fontWeight: "800",
+                color: "#211d1b",
+                textAlign: "center",
+                letterSpacing: -0.5,
+              }}
+            >
+              Navarachna Studio
+            </Text>
+            <Text
+              style={{
+                fontSize: 11,
                 fontWeight: "700",
-                color: "#80142c",
+                color: "#cf0046",
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                marginTop: 10,
+                marginTop: 4,
                 textAlign: "center",
               }}
             >
@@ -176,7 +214,7 @@ export default function MobileLoginScreen() {
             style={{
               backgroundColor: "#ffffff",
               borderWidth: 1,
-              borderColor: "#e2e8f0",
+              borderColor: "#e7e2dd",
               borderRadius: 24,
               padding: 24,
               width: "100%",
@@ -201,7 +239,7 @@ export default function MobileLoginScreen() {
                   marginBottom: 18,
                 }}
               >
-                <AlertCircle size={18} color="#9E1B38" strokeWidth={2} />
+                <AlertCircle size={18} color="#cf0046" strokeWidth={2} />
                 <Text
                   style={{
                     fontSize: 13,
@@ -223,7 +261,7 @@ export default function MobileLoginScreen() {
                 style={{
                   fontSize: 14,
                   fontWeight: "600",
-                  color: "#334155",
+                  color: "#4d4743",
                   marginBottom: 8,
                 }}
               >
@@ -237,13 +275,13 @@ export default function MobileLoginScreen() {
                   borderRadius: 14,
                   paddingHorizontal: 14,
                   borderWidth: focusedField === "identifier" ? 1.5 : 1,
-                  borderColor: focusedField === "identifier" ? "#9E1B38" : "#e2e8f0",
-                  backgroundColor: focusedField === "identifier" ? "#ffffff" : "#f8fafc",
+                  borderColor: focusedField === "identifier" ? "#cf0046" : "#e7e2dd",
+                  backgroundColor: focusedField === "identifier" ? "#ffffff" : "#f7f6f3",
                 }}
               >
                 <User
                   size={20}
-                  color={focusedField === "identifier" ? "#9E1B38" : "#94a3b8"}
+                  color={focusedField === "identifier" ? "#cf0046" : "#958d87"}
                   strokeWidth={focusedField === "identifier" ? 2.5 : 2}
                 />
                 <TextInput
@@ -252,7 +290,7 @@ export default function MobileLoginScreen() {
                   onFocus={() => handleInputFocus("identifier")}
                   onBlur={() => setFocusedField(null)}
                   placeholder="Username or email"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#958d87"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
@@ -260,7 +298,7 @@ export default function MobileLoginScreen() {
                     flex: 1,
                     fontSize: 16,
                     fontWeight: "500",
-                    color: "#0f172a",
+                    color: "#211d1b",
                     marginLeft: 10,
                     paddingVertical: 0,
                   }}
@@ -274,7 +312,7 @@ export default function MobileLoginScreen() {
                 style={{
                   fontSize: 14,
                   fontWeight: "600",
-                  color: "#334155",
+                  color: "#4d4743",
                   marginBottom: 8,
                 }}
               >
@@ -288,13 +326,13 @@ export default function MobileLoginScreen() {
                   borderRadius: 14,
                   paddingHorizontal: 14,
                   borderWidth: focusedField === "password" ? 1.5 : 1,
-                  borderColor: focusedField === "password" ? "#9E1B38" : "#e2e8f0",
-                  backgroundColor: focusedField === "password" ? "#ffffff" : "#f8fafc",
+                  borderColor: focusedField === "password" ? "#cf0046" : "#e7e2dd",
+                  backgroundColor: focusedField === "password" ? "#ffffff" : "#f7f6f3",
                 }}
               >
                 <Lock
                   size={20}
-                  color={focusedField === "password" ? "#9E1B38" : "#94a3b8"}
+                  color={focusedField === "password" ? "#cf0046" : "#958d87"}
                   strokeWidth={focusedField === "password" ? 2.5 : 2}
                 />
                 <TextInput
@@ -303,7 +341,7 @@ export default function MobileLoginScreen() {
                   onFocus={() => handleInputFocus("password")}
                   onBlur={() => setFocusedField(null)}
                   placeholder="Enter your password"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#958d87"
                   secureTextEntry={!showPassword}
                   returnKeyType="go"
                   onSubmitEditing={() => handleLogin(false)}
@@ -311,7 +349,7 @@ export default function MobileLoginScreen() {
                     flex: 1,
                     fontSize: 16,
                     fontWeight: "500",
-                    color: "#0f172a",
+                    color: "#211d1b",
                     marginLeft: 10,
                     paddingVertical: 0,
                   }}
@@ -323,9 +361,9 @@ export default function MobileLoginScreen() {
                   accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeOff size={20} color="#64748b" strokeWidth={2} />
+                    <EyeOff size={20} color="#756d68" strokeWidth={2} />
                   ) : (
-                    <Eye size={20} color="#94a3b8" strokeWidth={2} />
+                    <Eye size={20} color="#958d87" strokeWidth={2} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -338,12 +376,12 @@ export default function MobileLoginScreen() {
               activeOpacity={0.85}
               style={{
                 height: 52,
-                backgroundColor: loading ? "#BE185D" : "#9E1B38",
+                backgroundColor: loading ? "#f43f5e" : "#cf0046",
                 borderRadius: 14,
                 alignItems: "center",
                 justifyContent: "center",
                 flexDirection: "row",
-                shadowColor: "#9E1B38",
+                shadowColor: "#cf0046",
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,

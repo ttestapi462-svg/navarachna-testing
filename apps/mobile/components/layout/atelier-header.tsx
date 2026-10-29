@@ -1,10 +1,12 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { StudioLogoIcon } from "../brand/StudioLogo";
+import { Layers } from "lucide-react-native";
 import { HEADER_BAR_HEIGHT } from "../../constants/layout";
+import { mobileTheme } from "../../constants/theme";
 
 export interface AtelierHeaderProps {
   title?: string;
@@ -13,6 +15,16 @@ export interface AtelierHeaderProps {
   onPressProfile?: () => void;
   onPressScan?: () => void;
   onPressAction?: () => void;
+  rightAction?: React.ReactNode;
+  showProfile?: boolean;
+  icon?: React.ReactNode;
+  compactBrand?: boolean;
+  backgroundColor?: string;
+  brandMarkStyle?: StyleProp<ViewStyle>;
+  brandTitleStyle?: StyleProp<TextStyle>;
+  barStyle?: StyleProp<ViewStyle>;
+  brandContainerStyle?: StyleProp<ViewStyle>;
+  preserveTitleSize?: boolean;
 }
 
 export function AtelierHeader({
@@ -20,6 +32,16 @@ export function AtelierHeader({
   userName = "Atelier Staff",
   isOnline = true,
   onPressProfile,
+  rightAction,
+  showProfile = true,
+  icon,
+  compactBrand = false,
+  backgroundColor,
+  brandMarkStyle,
+  brandTitleStyle,
+  barStyle,
+  brandContainerStyle,
+  preserveTitleSize = false,
 }: AtelierHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -36,108 +58,130 @@ export function AtelierHeader({
   return (
     <>
       <StatusBar style="dark" />
-      <LinearGradient
-        colors={[
-          "rgba(251, 198, 210, 0.95)",
-          "rgba(252, 210, 220, 0.82)",
-          "rgba(253, 226, 233, 0.55)",
-          "rgba(254, 242, 245, 0.25)",
-          "#f8fafc",
-        ]}
-        locations={[0, 0.40, 0.68, 0.88, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={[
-          styles.headerGradient,
-          { paddingTop: insets.top > 0 ? insets.top + 4 : 14 },
-        ]}
+      <View
+        style={[styles.headerGradient, { paddingTop: insets.top > 0 ? insets.top + 2 : 12 }]}
       >
-        <View style={styles.bar}>
-          {/* Left: Brand Crest & Studio Title */}
-          <View style={styles.brandContainer}>
-            <View style={styles.logoTile}>
-              <StudioLogoIcon size={26} />
+        <LinearGradient
+          pointerEvents="none"
+          colors={[backgroundColor || "#F9D2DC", "#FCE7EC", "#F7F7FB"]}
+          locations={[0, 0.48, 1]}
+          style={styles.ambientWash}
+        />
+        <View style={[styles.bar, barStyle]}>
+          {/* Left: Brand Crest / Feature Icon & Studio Title */}
+          <View style={[styles.brandContainer, brandContainerStyle]}>
+            <View style={[styles.logoTile, compactBrand && styles.compactLogoTile, brandMarkStyle]}>
+              {icon || <Layers size={19} color="#ffffff" strokeWidth={2.3} />}
             </View>
-            <Text style={styles.brandTitle} numberOfLines={1}>
+            <Text style={[styles.brandTitle, compactBrand && styles.compactBrandTitle, brandTitleStyle]} numberOfLines={1} adjustsFontSizeToFit={!preserveTitleSize} minimumFontScale={0.8}>
               {title}
             </Text>
           </View>
 
-          {/* Right: Clean Profile Avatar with integrated Live Status indicator */}
-          <TouchableOpacity
-            onPress={onPressProfile}
-            activeOpacity={0.8}
-            style={styles.avatarTouchable}
-            accessibilityLabel={`Operator profile: ${userName}`}
-          >
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: isOnline ? "#10b981" : "#cbd5e1" },
-              ]}
-            />
-          </TouchableOpacity>
+          {/* Right: Actions & Clean Profile Avatar with integrated Live Status indicator */}
+          <View style={styles.rightContainer}>
+            {rightAction}
+            {showProfile && (
+              <TouchableOpacity
+                onPress={onPressProfile}
+                activeOpacity={0.8}
+                style={styles.avatarTouchable}
+                accessibilityLabel={`Operator profile: ${userName}`}
+              >
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: isOnline ? "#10b981" : "#cbd5e1" },
+                  ]}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </LinearGradient>
+      </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  ambientWash: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 156,
+  },
   headerGradient: {
     width: "100%",
-    paddingBottom: 12,
-    backgroundColor: "#f8fafc",
+    paddingBottom: 10,
+    backgroundColor: "transparent",
   },
   bar: {
-    height: HEADER_BAR_HEIGHT,
-    paddingHorizontal: 16,
+    minHeight: HEADER_BAR_HEIGHT + 2,
+    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   brandContainer: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 13,
+  },
+  rightContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
   },
   logoTile: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: mobileTheme.color.primary,
     borderWidth: 1,
-    borderColor: "#fecdd6",
+    borderColor: mobileTheme.color.primary,
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
       ios: {
-        shadowColor: "#9e1b38",
+        shadowColor: mobileTheme.color.primary,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
+        shadowOpacity: 0.16,
         shadowRadius: 4,
       },
       default: {
-        boxShadow: "0 2px 6px rgba(158, 27, 56, 0.12)",
+        boxShadow: "0 2px 5px rgba(225, 29, 72, 0.14)",
       },
     }),
   },
+  compactLogoTile: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+  },
   brandTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.3,
+    color: mobileTheme.color.ink,
+    letterSpacing: -0.45,
+    flexShrink: 1,
+  },
+  compactBrandTitle: {
+    fontSize: 17,
   },
   avatarTouchable: {
     position: "relative",
   },
   avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#ffffff",
     borderWidth: 1.5,
     borderColor: "rgba(225, 29, 72, 0.18)",
@@ -158,7 +202,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#e11d48",
+    color: "#cf0046",
   },
   statusDot: {
     position: "absolute",
@@ -171,6 +215,3 @@ const styles = StyleSheet.create({
     borderColor: "#ffffff",
   },
 });
-
-
-

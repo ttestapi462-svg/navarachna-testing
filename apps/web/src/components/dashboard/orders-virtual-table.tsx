@@ -122,25 +122,24 @@ export function OrdersVirtualTable() {
   });
 
   return (
-    <Card className="rounded-4xl border border-border/70 shadow-sm">
+    <Card className="rounded-2xl border border-border/70 shadow-sm">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-base flex items-center gap-2 text-foreground">
               <CheckCircle2 className="h-5 w-5 text-primary" />
-              Live Atelier Production Schedule
+              Atelier Production Schedule
             </CardTitle>
             <CardDescription>
-              High-performance TanStack Virtualized Table (100 active garments rendering at 60fps)
+              Production schedule overview
             </CardDescription>
           </div>
-          <Badge variant="outline">TanStack Virtual 3.14</Badge>
         </div>
       </CardHeader>
       <CardContent>
         <div
           ref={tableContainerRef}
-          className="h-80 overflow-auto border border-border/70 rounded-3xl bg-card relative"
+          className="h-80 overflow-auto border border-border/70 rounded-xl bg-card relative"
         >
           <div
             style={{
