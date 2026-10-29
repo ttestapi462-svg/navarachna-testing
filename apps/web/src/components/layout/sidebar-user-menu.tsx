@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/context/dashboard-auth-context";
 import { ChevronsUpDown, LogOut, User } from "lucide-react";
@@ -22,7 +22,11 @@ export function SidebarUserMenu() {
 
   if (!user) return null;
 
-  const initials = `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "NA";
+  const avatarUrl =
+    (user as unknown as { avatarUrl?: string; profilePhotoUrl?: string })
+      ?.avatarUrl ||
+    (user as unknown as { avatarUrl?: string; profilePhotoUrl?: string })
+      ?.profilePhotoUrl;
   const fullName = `${user.firstName || "Studio"} ${user.lastName || "Admin"}`.trim();
 
   return (
@@ -34,9 +38,12 @@ export function SidebarUserMenu() {
           tooltip={fullName}
           className="h-9 px-2 rounded-lg gap-2.5 cursor-pointer hover:bg-muted/60 data-[state=open]:bg-muted/80 transition-colors group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-auto"
         >
-          <Avatar className="size-7 group-data-[collapsible=icon]:size-8 rounded-full border border-primary/20 bg-primary/10 text-primary font-semibold text-[11px] shrink-0">
-            <AvatarFallback className="rounded-full bg-primary/10 text-primary font-medium text-[11px]">
-              {initials}
+          <Avatar className="size-7 group-data-[collapsible=icon]:size-8 rounded-full border border-primary/20 bg-primary/10 text-primary shrink-0">
+            {avatarUrl ? (
+              <AvatarImage src={avatarUrl} alt={fullName} />
+            ) : null}
+            <AvatarFallback className="rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <User className="size-3.5 group-data-[collapsible=icon]:size-4" />
             </AvatarFallback>
           </Avatar>
           <div className="grid flex-1 text-left leading-none group-data-[collapsible=icon]:hidden">
@@ -56,9 +63,12 @@ export function SidebarUserMenu() {
       >
         <DropdownMenuLabel className="p-1 font-normal">
           <div className="flex items-center gap-2 px-1 py-1 text-left">
-            <Avatar className="size-7 rounded-full border border-primary/20 bg-primary/10 text-primary font-semibold text-[11px] shrink-0">
-              <AvatarFallback className="rounded-full bg-primary/10 text-primary font-medium text-[11px]">
-                {initials}
+            <Avatar className="size-7 rounded-full border border-primary/20 bg-primary/10 text-primary shrink-0">
+              {avatarUrl ? (
+                <AvatarImage src={avatarUrl} alt={fullName} />
+              ) : null}
+              <AvatarFallback className="rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <User className="size-3.5" />
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left leading-none">
@@ -84,12 +94,13 @@ export function SidebarUserMenu() {
         {/* Logout Option - Prompts Confirmation Dialog */}
         <DropdownMenuItem
           variant="destructive"
+          className="text-destructive font-medium cursor-pointer focus:bg-destructive/10 focus:text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive"
           onSelect={(e) => {
             e.preventDefault();
             setShowLogoutDialog(true);
           }}
         >
-          <LogOut className="size-3.5" />
+          <LogOut className="size-3.5 text-destructive" />
           <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

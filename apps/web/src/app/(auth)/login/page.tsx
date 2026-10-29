@@ -2,11 +2,10 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Layers,
   Lock,
   User,
   Eye,
@@ -22,6 +21,14 @@ import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -34,7 +41,8 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AtelierHeroIllustration } from "@/components/atelier-hero-illustration";
+import { AtelierShowcaseCarousel } from "@/components/atelier-showcase-carousel";
+import { StudioBrandMark } from "@/components/brand/studio-logo";
 
 function LoginContent() {
   const router = useRouter();
@@ -126,64 +134,31 @@ function LoginContent() {
 
   const onSubmit = (values: LoginFormValues) => performLogin(values, false);
 
+  const onInvalid = (fieldErrors: FieldErrors<LoginFormValues>) => {
+    const errorCount = Object.keys(fieldErrors).length;
+    const firstMsg = Object.values(fieldErrors).find((e) => e?.message)?.message;
+    toast.warning("Please check required fields", {
+      description:
+        typeof firstMsg === "string"
+          ? firstMsg
+          : `Please review ${errorCount} incomplete or invalid field${errorCount > 1 ? "s" : ""}.`,
+    });
+  };
+
   return (
     <div className="min-h-screen w-screen lg:h-screen lg:max-h-screen lg:overflow-hidden overflow-y-auto grid grid-cols-1 lg:grid-cols-2 bg-slate-50 font-sans select-none">
-      {/* LEFT HALF: Spacious Atelier Brand Showcase */}
-      <div className="hidden lg:flex flex-col justify-between h-full bg-gradient-to-br from-rose-50/70 via-rose-50/30 to-slate-50 border-r border-rose-100 p-8 xl:p-12 relative overflow-hidden">
-        {/* Subtle Ambient Decorative Rings */}
-        <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full border border-rose-200/50 pointer-events-none" />
-        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full border border-rose-200/40 pointer-events-none" />
-
-        {/* Top: Studio Emblem & Brand Identity */}
-        <div className="flex items-center gap-3 z-10">
-          <div className="h-10 w-10 rounded-xl bg-white border border-rose-200 flex items-center justify-center text-rose-600 shadow-xs">
-            <Layers className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-base xl:text-lg font-bold tracking-tight text-slate-900 leading-tight">
-              Navarachna Designer Studio
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Haute Couture Atelier
-            </p>
-          </div>
-        </div>
-
-        {/* Center: Haute Couture Vector Artwork */}
-        <div className="my-auto flex items-center justify-center z-10 py-2 px-4 w-full">
-          <AtelierHeroIllustration className="max-w-[380px] xl:max-w-[440px] 2xl:max-w-[480px] w-full" />
-        </div>
-
-        {/* Bottom: Studio Philosophy Statement */}
-        <div className="z-10 space-y-1 max-w-md">
-          <h3 className="text-xl xl:text-2xl font-bold tracking-tight text-slate-900 font-heading leading-snug">
-            Precision in every cut. Elegance in every stitch.
-          </h3>
-          <p className="text-xs xl:text-sm text-slate-500 leading-relaxed font-normal">
-            Atelier Operations & Bespoke Garment Management
-          </p>
-        </div>
+      {/* LEFT HALF: Complete Full-Bleed Haute Couture Atelier Carousel */}
+      <div className="hidden lg:block relative h-full w-full overflow-hidden select-none bg-slate-950 border-r border-rose-950/20">
+        <AtelierShowcaseCarousel />
       </div>
 
       {/* RIGHT HALF: Refined & Compact Sign In Panel */}
       <div className="flex flex-col justify-between min-h-screen lg:min-h-0 lg:h-full p-6 sm:p-8 lg:p-10 xl:p-14 bg-white relative overflow-y-auto lg:overflow-hidden">
-        {/* Mobile-Only Header */}
-        <div className="lg:hidden flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
-            <Layers className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <span className="font-bold text-sm tracking-tight text-slate-900">
-              Navarachna Designer Studio
-            </span>
-            <p className="text-[10px] text-rose-600 font-semibold uppercase tracking-wider">
-              Haute Couture Atelier
-            </p>
-          </div>
-        </div>
-
         {/* Center: Compact & Refined Sign-in Form Container */}
         <div className="max-w-[380px] xl:max-w-[400px] w-full mx-auto my-auto space-y-5">
+          <div className="pb-1">
+            <StudioBrandMark variant="horizontal" height={48} gap={16} priority />
+          </div>
           <div className="space-y-1.5">
             <h1 className="text-2xl xl:text-3xl font-extrabold tracking-tight text-slate-900 font-heading">
               Sign In
@@ -260,72 +235,124 @@ function LoginContent() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-0.5">
+          <form
+            noValidate
+            onSubmit={handleSubmit(onSubmit, onInvalid)}
+            className="space-y-3.5 pt-0.5"
+          >
             {authError && (
-              <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                <span className="font-medium">{authError}</span>
+              <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 flex items-start gap-2.5 text-xs text-destructive animate-in fade-in-0 duration-200">
+                <AlertCircle className="size-4 shrink-0 mt-0.5 text-destructive" />
+                <div className="flex-1">
+                  <p className="font-semibold text-destructive">Authentication Error</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-destructive/90">
+                    {authError}
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* ReUI Field: Username or Email with Prefix User Icon */}
-            <Field data-invalid={!!errors.identifier}>
-              <FieldLabel htmlFor="identifier" className="text-sm font-semibold text-slate-700 mb-1.5">
-                Username or Email
+            {/* ReUI Field: Username or Email with InputGroup & Dynamic Error State */}
+            <Field className="gap-1">
+              <FieldLabel
+                htmlFor="identifier"
+                className={cn(
+                  "text-xs font-semibold tracking-tight transition-colors",
+                  errors.identifier ? "text-destructive" : "text-foreground/85"
+                )}
+              >
+                Username or Email <span className="text-destructive font-bold">*</span>
               </FieldLabel>
-              <div className="relative">
-                <User
-                  className="h-4.5 w-4.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                />
-                <Input
+              <InputGroup
+                aria-invalid={!!errors.identifier}
+                className={cn(
+                  "h-10 transition-all rounded-xl",
+                  errors.identifier
+                    ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                    : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                )}
+              >
+                <InputGroupAddon>
+                  <User
+                    className={cn(
+                      "size-4 transition-colors",
+                      errors.identifier ? "text-destructive" : "text-muted-foreground/70"
+                    )}
+                  />
+                </InputGroupAddon>
+                <InputGroupInput
                   id="identifier"
                   {...register("identifier")}
                   placeholder="admin or admin@navarachna.com"
-                  className="pl-10 h-11 text-sm rounded-xl"
-                  aria-invalid={!!errors.identifier}
+                  className="text-xs sm:text-sm placeholder:text-muted-foreground/60 h-10"
                   disabled={isSubmitting}
+                  aria-invalid={!!errors.identifier}
                   autoComplete="username"
                 />
-              </div>
+              </InputGroup>
               {errors.identifier && (
-                <FieldError className="mt-1 text-xs text-rose-600">{errors.identifier.message}</FieldError>
+                <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5 animate-in fade-in-0 duration-150">
+                  <AlertCircle className="size-3 shrink-0" />
+                  <span>{errors.identifier.message}</span>
+                </FieldError>
               )}
             </Field>
 
-            {/* ReUI Field: Password with Prefix LockKey & Trailing Eye Toggle */}
-            <Field data-invalid={!!errors.password}>
-              <FieldLabel htmlFor="password" className="text-sm font-semibold text-slate-700 mb-1.5">
-                Password
+            {/* ReUI Field: Password with InputGroup & Trailing Toggle Eye */}
+            <Field className="gap-1">
+              <FieldLabel
+                htmlFor="password"
+                className={cn(
+                  "text-xs font-semibold tracking-tight transition-colors",
+                  errors.password ? "text-destructive" : "text-foreground/85"
+                )}
+              >
+                Password <span className="text-destructive font-bold">*</span>
               </FieldLabel>
-              <div className="relative">
-                <Lock
-                  className="h-4.5 w-4.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                />
-                <Input
+              <InputGroup
+                aria-invalid={!!errors.password}
+                className={cn(
+                  "h-10 transition-all rounded-xl",
+                  errors.password
+                    ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
+                    : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
+                )}
+              >
+                <InputGroupAddon>
+                  <Lock
+                    className={cn(
+                      "size-4 transition-colors",
+                      errors.password ? "text-destructive" : "text-muted-foreground/70"
+                    )}
+                  />
+                </InputGroupAddon>
+                <InputGroupInput
                   id="password"
                   {...register("password")}
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 pr-10 h-11 text-sm rounded-xl"
-                  aria-invalid={!!errors.password}
+                  className="text-xs sm:text-sm placeholder:text-muted-foreground/60 h-10"
                   disabled={isSubmitting}
+                  aria-invalid={!!errors.password}
                   autoComplete="current-password"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    type="button"
+                    size="icon-xs"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted-foreground/70 hover:text-foreground cursor-pointer"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
               {errors.password && (
-                <FieldError className="mt-1 text-xs text-rose-600">{errors.password.message}</FieldError>
+                <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5 animate-in fade-in-0 duration-150">
+                  <AlertCircle className="size-3 shrink-0" />
+                  <span>{errors.password.message}</span>
+                </FieldError>
               )}
             </Field>
 
@@ -333,11 +360,11 @@ function LoginContent() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm shadow-rose-600/20 active:scale-[0.99] transition-all cursor-pointer mt-2 text-sm"
+              className="w-full h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs sm:text-sm shadow-xs cursor-pointer active:scale-[0.99] transition-all mt-2"
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                   Signing in...
                 </span>
               ) : (
