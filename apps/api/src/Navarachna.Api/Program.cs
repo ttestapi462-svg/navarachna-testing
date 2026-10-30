@@ -24,6 +24,8 @@ using Navarachna.Api.Features.Expenses;
 
 using Navarachna.Api.Hubs;
 
+using EmployeeApi.Services;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +49,13 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<DocumentService>();
+
+if (string.Equals(builder.Configuration["Storage:Provider"], "Blob", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+else
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 
 
 
