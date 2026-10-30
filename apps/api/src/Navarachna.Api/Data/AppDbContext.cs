@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Navarachna.Api.Common;
 using Navarachna.Api.Entities;
+using EmployeeApi.Models;
+using Employee = EmployeeApi.Models.Employee;
 
 namespace Navarachna.Api.Data;
 
@@ -14,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<UserToken> UserTokens => Set<UserToken>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<Employee> Employees => Set<Employee>();
+
+    public DbSet<EmployeeDocument> EmployeeDocuments => Set<EmployeeDocument>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -150,9 +154,30 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("Id").ValueGeneratedOnAdd();
             entity.Property(e => e.FirstName).HasColumnName("FirstName");
             entity.Property(e => e.LastName).HasColumnName("LastName");
+            entity.Property(e => e.Email).HasColumnName("Email");
             entity.Property(e => e.Mobile).HasColumnName("Mobile");
+            entity.Property(e => e.PanNumber).HasColumnName("PanNumber");
+            entity.Property(e => e.AadhaarNumber).HasColumnName("AadhaarNumber");
             entity.Property(e => e.Department).HasColumnName("Department");
+            entity.Property(e => e.Salary).HasColumnName("Salary").HasPrecision(12, 2);
+            entity.Property(e => e.DateOfJoining).HasColumnName("DateOfJoining");
             entity.Property(e => e.IsActive).HasColumnName("IsActive");
+            entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt");
+            entity.Property(e => e.Version).HasColumnName("xmin").IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+            entity.HasIndex(e => e.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<EmployeeDocument>(entity =>
+        {
+            entity.ToTable("EmployeeDocuments");
+            entity.HasKey(document => document.Id);
+            entity.Property(document => document.Id).ValueGeneratedOnAdd();
+            entity.Property(document => document.DocumentType).HasMaxLength(20).HasConversion<string>();
+            entity.HasIndex(document => new { document.EmployeeId, document.DocumentType }).IsUnique();
+            entity.HasOne(document => document.Employee)
+                .WithMany(employee => employee.Documents)
+                .HasForeignKey(document => document.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
 

@@ -29,14 +29,14 @@ const chartData = [
 
 export function RevenueChart({ className }: { className?: string }) {
   return (
-    <Card className={cn("rounded-2xl border border-border/70 shadow-sm", className)}>
+    <Card className={cn("rounded-4xl border border-border/70 shadow-sm", className)}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
           Atelier Revenue & Performance
         </CardTitle>
         <CardDescription>
-          Monthly revenue across the atelier
+          Monthly revenue trajectory rendered with Rose preset theme
         </CardDescription>
       </CardHeader>
       <CardContent className="h-72">

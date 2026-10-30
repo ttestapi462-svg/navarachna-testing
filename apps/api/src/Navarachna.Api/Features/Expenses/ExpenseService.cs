@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Navarachna.Api.Data;
 using Navarachna.Api.Entities;
+using Employee = EmployeeApi.Models.Employee;
 
 namespace Navarachna.Api.Features.Expenses;
 
