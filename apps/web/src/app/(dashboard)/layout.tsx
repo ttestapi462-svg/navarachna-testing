@@ -8,7 +8,6 @@ import {
   DashboardAuthProvider,
   useAuth,
 } from "@/context/dashboard-auth-context";
-import { HeaderActionProvider } from "@/context/header-action-context";
 import { Layers, Loader2 } from "lucide-react";
 
 function DashboardLayoutContent({ children }: { children: ReactNode }) {
@@ -36,8 +35,8 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
       <AppSidebar />
       <SidebarInset className="h-svh max-h-svh flex flex-col overflow-hidden bg-background text-foreground">
         <DashboardHeader />
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <main className="max-w-7xl w-full mx-auto px-4 pt-5 pb-8 sm:p-6 lg:p-7 space-y-5 md:space-y-6">
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+          <main className="flex-1 flex flex-col min-h-0 h-full w-full px-3.5 sm:px-5 py-2.5 sm:py-3">
             {children}
           </main>
         </div>
@@ -49,9 +48,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <DashboardAuthProvider>
-      <HeaderActionProvider>
-        <DashboardLayoutContent>{children}</DashboardLayoutContent>
-      </HeaderActionProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
     </DashboardAuthProvider>
   );
 }

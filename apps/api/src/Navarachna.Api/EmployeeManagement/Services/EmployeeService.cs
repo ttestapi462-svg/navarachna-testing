@@ -1,6 +1,7 @@
 using Navarachna.Api.Data;
 using EmployeeApi.Infrastructure;
 using EmployeeApi.Models;
+using Employee = EmployeeApi.Models.Employee;
 using Navarachna.Api.Entities;
 using Navarachna.Api.Features.Auth;
 using Microsoft.EntityFrameworkCore;
