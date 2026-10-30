@@ -52,6 +52,9 @@ function Button({
 
   return (
     <Comp
+      // Browser extensions (e.g. form fillers) add attributes like
+      // fdprocessedid after SSR, causing hydration mismatch warnings.
+      suppressHydrationWarning
       data-slot="button"
       data-variant={variant}
       data-size={size}
