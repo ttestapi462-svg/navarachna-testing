@@ -1,34 +1,33 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Lock,
-  User,
+  User as UserIcon,
   Eye,
   EyeOff,
   AlertCircle,
+  Check,
+  ArrowRight,
   Loader2,
   X,
   Smartphone,
 } from "lucide-react";
 
-import { apiClient, setStoredTokens, getStoredToken, clearStoredTokens, ApiError } from "@/lib/api-client";
-import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldLabel, FieldError } from "@/components/ui/field";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+  apiClient,
+  setStoredTokens,
+  getStoredToken,
+  clearStoredTokens,
+  ApiError,
+} from "@/lib/api-client";
+import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 import { toast } from "@/components/ui/sonner";
-import { cn } from "@/lib/utils";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -41,8 +40,6 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AtelierShowcaseCarousel } from "@/components/atelier-showcase-carousel";
-import { StudioBrandMark } from "@/components/brand/studio-logo";
 
 function LoginContent() {
   const router = useRouter();
@@ -51,15 +48,20 @@ function LoginContent() {
 
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [displayedReason, setDisplayedReason] = useState<string | null>(() => searchParams.get("reason"));
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [displayedReason, setDisplayedReason] = useState<string | null>(() =>
+    searchParams.get("reason")
+  );
   const [conflictSession, setConflictSession] = useState<{
     activeDevice: string;
     sessionStartedAt?: string;
   } | null>(null);
 
-  // If reason is present (superseded, terminated, expired), show alert temporarily,
-  // clear stale tokens, and clean URL params so refreshing/reloading vanishes the alert.
+  // If reason is present (superseded, terminated, expired), clear stale tokens
   useEffect(() => {
     const currentReason = searchParams.get("reason");
     if (currentReason) {
@@ -81,8 +83,8 @@ function LoginContent() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      identifier: "",
-      password: "",
+      identifier: "admin@navarachna.com",
+      password: "Admin@1234",
     },
   });
 
@@ -114,6 +116,9 @@ function LoginContent() {
           isAuthenticated: true,
           user: response.user,
         });
+        toast.success("Welcome back!", {
+          description: "Signed in to Navarachna Designer Studio.",
+        });
         router.replace("/");
       } else {
         setAuthError(response.message || "Failed to authenticate.");
@@ -135,42 +140,60 @@ function LoginContent() {
   const onSubmit = (values: LoginFormValues) => performLogin(values, false);
 
   const onInvalid = (fieldErrors: FieldErrors<LoginFormValues>) => {
-    const errorCount = Object.keys(fieldErrors).length;
     const firstMsg = Object.values(fieldErrors).find((e) => e?.message)?.message;
-    toast.warning("Please check required fields", {
-      description:
-        typeof firstMsg === "string"
-          ? firstMsg
-          : `Please review ${errorCount} incomplete or invalid field${errorCount > 1 ? "s" : ""}.`,
+    toast.warning("Please review required fields", {
+      description: typeof firstMsg === "string" ? firstMsg : "Please enter your username and password.",
     });
   };
 
   return (
-    <div className="min-h-screen w-screen lg:h-screen lg:max-h-screen lg:overflow-hidden overflow-y-auto grid grid-cols-1 lg:grid-cols-2 bg-slate-50 font-sans select-none">
-      {/* LEFT HALF: Complete Full-Bleed Haute Couture Atelier Carousel */}
-      <div className="hidden lg:block relative h-full w-full overflow-hidden select-none bg-slate-950 border-r border-rose-950/20">
-        <AtelierShowcaseCarousel />
-      </div>
+    <div className="relative h-screen w-full flex flex-col justify-center items-center bg-[#FAF7F2] overflow-hidden selection:bg-[#C59B4E]/30 selection:text-[#581124] px-4">
+      {/* Background Graphic Plate matching reference */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-no-repeat bg-center bg-cover"
+        style={{
+          backgroundImage: "url('/assets/clean-bg.png')",
+        }}
+      />
 
-      {/* RIGHT HALF: Refined & Compact Sign In Panel */}
-      <div className="flex flex-col justify-between min-h-screen lg:min-h-0 lg:h-full p-6 sm:p-8 lg:p-10 xl:p-14 bg-white relative overflow-y-auto lg:overflow-hidden">
-        {/* Center: Compact & Refined Sign-in Form Container */}
-        <div className="max-w-[380px] xl:max-w-[400px] w-full mx-auto my-auto space-y-5">
-          <div className="pb-1">
-            <StudioBrandMark variant="horizontal" height={48} gap={16} priority />
+      {/* Main Container */}
+      <div className="relative z-10 w-full max-w-[436px] flex flex-col items-center -mt-2">
+        {/* Brand Logo Monogram - No Background (Transparent cream background & 3D Gold matching text) */}
+        <div className="mb-1 flex flex-col items-center select-none">
+          <div className="relative w-[102px] h-[102px] sm:w-[114px] sm:h-[114px] flex items-center justify-center drop-shadow-[0_4px_10px_rgba(88,17,36,0.22)] transition-transform duration-300 hover:scale-105">
+            <Image
+              src="/assets/navarachna-needle-gold-square.png"
+              alt="Navarachna Needle & Thread Monogram"
+              width={114}
+              height={114}
+              priority
+              className="object-contain w-full h-full"
+            />
           </div>
-          <div className="space-y-1.5">
-            <h1 className="text-2xl xl:text-3xl font-extrabold tracking-tight text-slate-900 font-heading">
-              Sign In
-            </h1>
-            <p className="text-xs xl:text-sm text-slate-500 leading-relaxed">
-              Enter your studio credentials to access your active workspace.
-            </p>
+        </div>
+
+        {/* 3D Embossed Gold Brand Text from Official Logo (Preserved authentic gold design) */}
+        <div className="mb-2 flex flex-col items-center select-none">
+          <div className="relative w-[275px] sm:w-[300px] aspect-[799/308] drop-shadow-[0_2px_4px_rgba(88,17,36,0.28)] transition-transform duration-300 hover:scale-[1.01]">
+            <Image
+              src="/assets/navarachna-3d-text-perfect.png"
+              alt="Navarachna Designer Studio"
+              fill
+              priority
+              className="object-contain"
+            />
           </div>
 
+          <p className="text-[#6E6862] font-sans text-[13px] sm:text-[13.5px] mt-0.5 font-normal">
+            Sign in to continue to your account
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <div className="w-full bg-white rounded-[22px] px-8 py-7 studio-card-shadow border border-white/60">
           {/* Session Transfer / Expiry Alerts (Temporary: vanishes on page reload or dismiss) */}
           {displayedReason === "session_superseded" && (
-            <Alert className="relative border-rose-200 bg-rose-50 text-slate-900 rounded-xl p-3 pr-8 shadow-xs animate-in fade-in duration-300">
+            <Alert className="mb-4 relative border-rose-200 bg-rose-50 text-slate-900 rounded-xl p-3 pr-8 shadow-xs animate-in fade-in duration-300">
               <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
               <div>
                 <AlertTitle className="text-slate-900 text-xs font-semibold">
@@ -192,7 +215,7 @@ function LoginContent() {
           )}
 
           {displayedReason === "expired" && (
-            <Alert className="relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
+            <Alert className="mb-4 relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
               <Lock className="h-4 w-4 text-slate-500 shrink-0" />
               <div>
                 <AlertTitle className="text-slate-900 text-xs font-semibold">
@@ -214,7 +237,7 @@ function LoginContent() {
           )}
 
           {displayedReason === "session_terminated" && (
-            <Alert className="relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
+            <Alert className="mb-4 relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
               <Lock className="h-4 w-4 text-slate-500 shrink-0" />
               <div>
                 <AlertTitle className="text-slate-900 text-xs font-semibold">
@@ -238,198 +261,249 @@ function LoginContent() {
           <form
             noValidate
             onSubmit={handleSubmit(onSubmit, onInvalid)}
-            className="space-y-3.5 pt-0.5"
+            className="space-y-4"
           >
+            {/* Error Notification */}
             {authError && (
-              <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 flex items-start gap-2.5 text-xs text-destructive animate-in fade-in-0 duration-200">
-                <AlertCircle className="size-4 shrink-0 mt-0.5 text-destructive" />
-                <div className="flex-1">
-                  <p className="font-semibold text-destructive">Authentication Error</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-destructive/90">
-                    {authError}
-                  </p>
-                </div>
+              <div className="p-2.5 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                <span>{authError}</span>
               </div>
             )}
 
-            {/* ReUI Field: Username or Email with InputGroup & Dynamic Error State */}
-            <Field className="gap-1">
-              <FieldLabel
+            {/* Username / Identifier Field */}
+            <div className="space-y-1.5">
+              <label
                 htmlFor="identifier"
-                className={cn(
-                  "text-xs font-semibold tracking-tight transition-colors",
-                  errors.identifier ? "text-destructive" : "text-foreground/85"
-                )}
+                className="block text-[13px] font-medium text-slate-700"
               >
-                Username or Email <span className="text-destructive font-bold">*</span>
-              </FieldLabel>
-              <InputGroup
-                aria-invalid={!!errors.identifier}
-                className={cn(
-                  "h-10 transition-all rounded-xl",
-                  errors.identifier
-                    ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
-                    : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
-                )}
-              >
-                <InputGroupAddon>
-                  <User
-                    className={cn(
-                      "size-4 transition-colors",
-                      errors.identifier ? "text-destructive" : "text-muted-foreground/70"
-                    )}
-                  />
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="identifier"
+                Username
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+                  <UserIcon className="h-4 w-4 stroke-[1.6]" />
+                </div>
+                <input
                   {...register("identifier")}
-                  placeholder="admin or admin@navarachna.com"
-                  className="text-xs sm:text-sm placeholder:text-muted-foreground/60 h-10"
-                  disabled={isSubmitting}
-                  aria-invalid={!!errors.identifier}
-                  autoComplete="username"
+                  id="identifier"
+                  type="text"
+                  placeholder="Enter your username"
+                  className="w-full h-[46px] pl-10 pr-3.5 rounded-lg border border-slate-200 bg-white text-slate-800 text-[13.5px] placeholder:text-slate-400 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E] transition-all duration-150"
                 />
-              </InputGroup>
+              </div>
               {errors.identifier && (
-                <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5 animate-in fade-in-0 duration-150">
-                  <AlertCircle className="size-3 shrink-0" />
-                  <span>{errors.identifier.message}</span>
-                </FieldError>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.identifier.message}
+                </p>
               )}
-            </Field>
+            </div>
 
-            {/* ReUI Field: Password with InputGroup & Trailing Toggle Eye */}
-            <Field className="gap-1">
-              <FieldLabel
+            {/* Password Field */}
+            <div className="space-y-1.5">
+              <label
                 htmlFor="password"
-                className={cn(
-                  "text-xs font-semibold tracking-tight transition-colors",
-                  errors.password ? "text-destructive" : "text-foreground/85"
-                )}
+                className="block text-[13px] font-medium text-slate-700"
               >
-                Password <span className="text-destructive font-bold">*</span>
-              </FieldLabel>
-              <InputGroup
-                aria-invalid={!!errors.password}
-                className={cn(
-                  "h-10 transition-all rounded-xl",
-                  errors.password
-                    ? "border-destructive ring-2 ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/20"
-                    : "focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15"
-                )}
-              >
-                <InputGroupAddon>
-                  <Lock
-                    className={cn(
-                      "size-4 transition-colors",
-                      errors.password ? "text-destructive" : "text-muted-foreground/70"
-                    )}
-                  />
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="password"
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+                  <Lock className="h-4 w-4 stroke-[1.6]" />
+                </div>
+                <input
                   {...register("password")}
+                  id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  className="text-xs sm:text-sm placeholder:text-muted-foreground/60 h-10"
-                  disabled={isSubmitting}
-                  aria-invalid={!!errors.password}
-                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  className="w-full h-[46px] pl-10 pr-10 rounded-lg border border-slate-200 bg-white text-slate-800 text-[13.5px] placeholder:text-slate-400 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E] transition-all duration-150"
                 />
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    type="button"
-                    size="icon-xs"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-muted-foreground/70 hover:text-foreground cursor-pointer"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </InputGroupButton>
-                </InputGroupAddon>
-              </InputGroup>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 cursor-pointer"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 stroke-[1.6]" />
+                  ) : (
+                    <Eye className="h-4 w-4 stroke-[1.6]" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
-                <FieldError className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-0.5 animate-in fade-in-0 duration-150">
-                  <AlertCircle className="size-3 shrink-0" />
-                  <span>{errors.password.message}</span>
-                </FieldError>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.password.message}
+                </p>
               )}
-            </Field>
+            </div>
+
+            {/* Remember me & Forgot Password Row */}
+            <div className="flex items-center justify-between text-[13px] pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none group">
+                <div
+                  onClick={() => setRememberMe(!rememberMe)}
+                  className={`w-4 h-4 rounded flex items-center justify-center border transition-all duration-150 ${
+                    rememberMe
+                      ? "bg-[#C59B4E] border-[#C59B4E] text-white shadow-xs"
+                      : "border-slate-300 bg-white group-hover:border-slate-400"
+                  }`}
+                >
+                  {rememberMe && <Check className="h-3 w-3 stroke-[3]" />}
+                </div>
+                <span className="text-slate-600 group-hover:text-slate-800 transition-colors text-[13px]">
+                  Remember me
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="text-[#C59B4E] hover:text-[#A88038] font-normal transition-colors underline underline-offset-4 decoration-[#C59B4E]/40 hover:decoration-[#C59B4E] text-[13px] cursor-pointer"
+              >
+                Forgot Password?
+              </button>
+            </div>
 
             {/* Submit Button */}
-            <Button
+            <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs sm:text-sm shadow-xs cursor-pointer active:scale-[0.99] transition-all mt-2"
+              className="w-full h-12 mt-2 rounded-lg bg-[#581124] hover:bg-[#480E1D] active:bg-[#3C0A17] disabled:opacity-70 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition-all duration-150 cursor-pointer disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin" />
-                  Signing in...
-                </span>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Signing In...</span>
+                </>
               ) : (
-                "Sign In"
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="h-4 w-4 stroke-[2]" />
+                </>
               )}
-            </Button>
+            </button>
           </form>
         </div>
       </div>
 
-      {/* Session Takeover ReUI Alert Dialog with Atelier Theme Preset */}
+      {/* Conflict Session Dialog */}
       <AlertDialog
         open={!!conflictSession}
-        onOpenChange={(open) => {
-          if (!open && !isSubmitting) setConflictSession(null);
-        }}
+        onOpenChange={(open) => !open && setConflictSession(null)}
       >
-        <AlertDialogContent className="rounded-3xl p-6 sm:max-w-[420px] gap-5 shadow-2xl shadow-rose-950/5 border border-rose-100/90 bg-white">
-          <AlertDialogHeader className="sm:grid-cols-[auto_1fr] sm:text-left items-start gap-4">
-            <AlertDialogMedia className="size-12 rounded-2xl bg-rose-50 border border-rose-200/90 text-rose-600 mb-0 row-span-2 shrink-0">
-              <Smartphone className="size-6 text-rose-600" />
+        <AlertDialogContent className="max-w-md rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-amber-100 text-amber-900">
+              <Smartphone className="size-6 text-amber-700" />
             </AlertDialogMedia>
-            <AlertDialogTitle className="text-base font-bold text-slate-900 leading-snug">
-              Active Session Detected
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+            <AlertDialogTitle>Account In Use on Another Device</AlertDialogTitle>
+            <AlertDialogDescription>
               Your account is currently active on{" "}
-              <span className="font-semibold text-slate-900">
+              <strong className="text-foreground">
                 {conflictSession?.activeDevice}
-              </span>
-              {conflictSession?.sessionStartedAt ? (
-                <> since {new Date(conflictSession.sessionStartedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
-              ) : null}
-              . Continuing here will sign out that device.
+              </strong>
+              {conflictSession?.sessionStartedAt
+                ? ` (signed in at ${new Date(conflictSession.sessionStartedAt).toLocaleTimeString()})`
+                : ""}
+              . Would you like to terminate that session and sign in here?
             </AlertDialogDescription>
           </AlertDialogHeader>
-
-          <AlertDialogFooter className="border-t border-rose-100/70 -mx-6 -mb-6 px-6 py-4 bg-gradient-to-b from-white to-rose-50/30 rounded-b-3xl flex items-center justify-end gap-2.5">
-            <AlertDialogCancel
-              onClick={() => setConflictSession(null)}
-              disabled={isSubmitting}
-              className="h-9 px-4 rounded-xl text-xs font-medium cursor-pointer border-slate-200 hover:bg-slate-50 hover:text-slate-900 text-slate-700"
-            >
-              Cancel
-            </AlertDialogCancel>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleSubmit((vals) => performLogin(vals, true))();
+              className="bg-[#581124] hover:bg-[#480E1D] text-white"
+              onClick={() => {
+                handleSubmit((values) => performLogin(values, true))();
               }}
-              disabled={isSubmitting}
-              className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold cursor-pointer shadow-xs shadow-rose-600/25 active:scale-[0.99]"
             >
-              {isSubmitting ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Signing in...
-                </span>
-              ) : (
-                "Continue"
-              )}
+              Sign In Here (End Other)
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-semibold text-[#581124]">
+                Reset Password
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setForgotSubmitted(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {forgotSubmitted ? (
+              <div className="space-y-3 py-2 text-center">
+                <div className="mx-auto w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Check className="h-5 w-5 stroke-[2.5]" />
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  A password reset link has been dispatched to{" "}
+                  <span className="font-semibold text-slate-800">{forgotEmail}</span> if it is registered in our atelier system.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotModal(false);
+                    setForgotSubmitted(false);
+                  }}
+                  className="w-full h-9 rounded-lg bg-[#581124] text-white text-xs font-medium mt-2"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (forgotEmail) setForgotSubmitted(true);
+                }}
+                className="space-y-3"
+              >
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Enter your registered username or email address and our concierge will provide a secure recovery link.
+                </p>
+                <div className="space-y-1">
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@navarachna.com"
+                    className="w-full h-10 px-3 rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E]"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="flex-1 h-9 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 h-9 rounded-lg bg-[#581124] hover:bg-[#480E1D] text-white text-xs font-medium shadow-xs"
+                  >
+                    Send Link
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -438,8 +512,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-rose-600" />
+        <div className="h-screen w-screen flex items-center justify-center bg-[#FAF7F2]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#581124]" />
         </div>
       }
     >

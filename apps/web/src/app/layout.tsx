@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { Public_Sans, Baumans, Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { Public_Sans, Baumans } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const publicSans = Public_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const baumans = Baumans({ weight: "400", subsets: ["latin"], variable: "--font-brand" });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-serif", display: "swap" });
+const plusJakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-plus-jakarta", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Navarachna Designer Studio - Admin Portal",
@@ -28,8 +30,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans light", publicSans.variable, baumans.variable)} style={{ colorScheme: "light" }}>
-      <body className="min-h-screen bg-background text-foreground antialiased" style={{ colorScheme: "light" }}>
+    <html
+      lang="en"
+      className={cn(
+        "font-sans light",
+        publicSans.variable,
+        baumans.variable,
+        playfair.variable,
+        plusJakarta.variable
+      )}
+      style={{ colorScheme: "light" }}
+    >
+      <body className="min-h-screen bg-background text-foreground antialiased selection:bg-[#C59B4E]/30 selection:text-[#581124]" style={{ colorScheme: "light" }}>
         <Providers>{children}</Providers>
       </body>
     </html>
