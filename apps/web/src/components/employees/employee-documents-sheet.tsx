@@ -262,9 +262,9 @@ export function EmployeeDocumentsSheet({
         className="sm:max-w-md w-full flex flex-col p-0 gap-0"
       >
         {/* Header with Light Pink Theme Color Accent */}
-        <SheetHeader className="px-6 py-4.5 border-b border-rose-200/70 dark:border-rose-900/40 bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40 text-foreground flex flex-row items-center justify-between gap-3 space-y-0 shadow-2xs">
+        <SheetHeader className="px-6 py-4.5 border-b border-border bg-gradient-to-r from-primary/10 via-accent/25 to-background text-foreground flex flex-row items-center justify-between gap-3 space-y-0 shadow-2xs">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-rose-200/90 dark:border-rose-900/60 shadow-xs shrink-0">
+            <div className="flex size-9 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-border/80 shadow-xs shrink-0">
               <FileSignature className="size-4.5 text-primary stroke-[1.8]" />
             </div>
             <div>
@@ -611,10 +611,10 @@ export function EmployeeDocumentsSheet({
               </div>
 
               {/* Footer: Download & Delete available while previewing */}
-              <DialogFooter className="border-t border-border/60 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
+              <DialogFooter className="border-t border-border bg-muted/40 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
                 <Button
                   variant="outline"
-                  className="h-8 px-3.5 rounded-full text-xs font-medium border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer shadow-2xs"
+                  className="h-8 px-3.5 rounded-full text-xs font-medium border-border bg-card text-foreground hover:bg-muted cursor-pointer shadow-2xs"
                   onClick={() => handleDownload(previewDoc)}
                   disabled={downloadingId === previewDoc.id}
                 >
@@ -659,7 +659,7 @@ export function EmployeeDocumentsSheet({
           {/* Compact Content Body */}
           <div className="p-4 sm:p-4.5 pb-3 sm:pb-3.5 min-w-0">
             <div className="flex items-start gap-3 min-w-0">
-              <div className="size-9 rounded-full bg-rose-50 text-rose-600 border border-rose-200/90 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-900/60 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="size-9 rounded-full bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-center shrink-0 mt-0.5">
                 <Trash2 className="size-4.5" />
               </div>
               <div className="flex flex-col justify-center min-w-0 flex-1">
@@ -676,8 +676,8 @@ export function EmployeeDocumentsSheet({
 
             {/* Compact document preview card */}
             {docToDelete && (
-              <div className="mt-2.5 w-full rounded-xl bg-slate-50/80 dark:bg-zinc-900/50 border border-slate-200/90 dark:border-zinc-800 p-2 px-2.5 flex items-center gap-2.5 min-w-0 overflow-hidden">
-                <div className="size-7 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 flex items-center justify-center shrink-0">
+              <div className="mt-2.5 w-full rounded-xl bg-card border border-border p-2 px-2.5 flex items-center gap-2.5 min-w-0 overflow-hidden">
+                <div className="size-7 rounded-lg bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-center shrink-0">
                   <FileText className="size-3.5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -688,7 +688,7 @@ export function EmployeeDocumentsSheet({
                     {docToDelete.fileName}
                   </p>
                   <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
-                    <span className="font-medium text-rose-600 dark:text-rose-400">
+                    <span className="font-medium text-destructive">
                       {DocumentTypeLabels[docToDelete.documentType] || "Document"}
                     </span>
                     <span>•</span>
@@ -705,10 +705,10 @@ export function EmployeeDocumentsSheet({
           </div>
 
           {/* Full-width Divider & Tinted Footer with Compact Right-Aligned Pill Buttons */}
-          <AlertDialogFooter className="border-t border-slate-200/90 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
+          <AlertDialogFooter className="border-t border-border bg-muted/40 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
             <AlertDialogCancel
               disabled={deleteMutation.isPending}
-              className="h-8 px-3 rounded-full text-xs font-medium border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors shadow-2xs"
+              className="h-8 px-3 rounded-full text-xs font-medium border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors shadow-2xs"
             >
               Cancel
             </AlertDialogCancel>
@@ -716,7 +716,7 @@ export function EmployeeDocumentsSheet({
               variant="destructive"
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
-              className="h-8 px-3.5 rounded-full text-xs font-semibold cursor-pointer shadow-2xs transition-colors bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/90 dark:bg-rose-950/60 dark:hover:bg-rose-950/90 dark:text-rose-400 dark:border-rose-900/70 flex items-center justify-center gap-1.5"
+              className="h-8 px-3.5 rounded-full text-xs font-semibold cursor-pointer shadow-2xs transition-colors bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 flex items-center justify-center gap-1.5"
             >
               {deleteMutation.isPending ? (
                 <>

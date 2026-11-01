@@ -299,13 +299,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar font-sans select-none">
       {/* 1. Header: Refined Atelier Crest & Title + Desktop Shrink / Expand Trigger */}
-      <SidebarHeader className="h-16 border-b border-sidebar-border/60 pl-3.5 pr-2.5 flex flex-row items-center justify-between gap-3 overflow-hidden group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center">
+      <SidebarHeader className="h-14 border-b border-sidebar-border/60 pl-3.5 pr-2.5 flex flex-row items-center justify-between gap-3 overflow-hidden group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center">
         {/* Full Brand Logo (Expanded Mode Only) */}
         <Link
           href="/"
-          className="flex items-center flex-1 min-w-0 h-11 overflow-hidden hover:opacity-90 transition-opacity py-0.5 group-data-[collapsible=icon]:hidden"
+          className="flex items-center flex-1 min-w-0 h-12 overflow-hidden hover:opacity-90 transition-opacity py-0.5 group-data-[collapsible=icon]:hidden"
         >
-          <StudioBrandMark variant="horizontal" height={35} gap={16} className="w-auto justify-start" priority />
+          <StudioBrandMark variant="horizontal" height={30} className="w-auto justify-start" priority />
         </Link>
 
         {/* Sidebar Close Button on the Right Side of Menu Header (Expanded Mode Only) */}
@@ -334,22 +334,23 @@ export function AppSidebar() {
         <div className="hidden group-data-[collapsible=icon]:flex size-full items-center justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="group/toggle size-8 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
                 onClick={toggleSidebar}
-                className="group/toggle relative flex size-8 items-center justify-center rounded-lg cursor-pointer transition-all active:scale-95 select-none shrink-0"
                 aria-label="Expand sidebar"
               >
-                {/* 1. Default: Authentic Atelier Emblem (Centered & Balanced) */}
-                <div className="absolute inset-0 size-8 rounded-lg bg-white border border-rose-200/80 flex items-center justify-center shadow-xs transition-all duration-150 group-hover/toggle:opacity-0 group-hover/toggle:scale-75">
-                  <StudioLogoIcon size={20} />
-                </div>
+                {/* 1. Default: Sharp Logo (No Badge, No Animation) */}
+                <span className="flex items-center justify-center group-hover/toggle:hidden">
+                  <StudioLogoIcon size={24} />
+                </span>
 
-                {/* 2. Hover: Independent Toggle Button (Clean ghost/muted button + PanelLeft) */}
-                <div className="absolute inset-0 size-8 rounded-lg bg-muted text-foreground border border-border/70 flex items-center justify-center shadow-2xs transition-all duration-150 opacity-0 scale-75 group-hover/toggle:opacity-100 group-hover/toggle:scale-100">
+                {/* 2. On Hover: Instant Switch to Toggle Icon - 100% Identical to Header Button */}
+                <span className="hidden group-hover/toggle:flex items-center justify-center">
                   <PanelLeft className="size-4" />
-                </div>
-              </button>
+                </span>
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
               <p className="text-xs">Expand sidebar</p>

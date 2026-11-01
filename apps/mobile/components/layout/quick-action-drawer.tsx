@@ -30,8 +30,8 @@ const actions = [
     title: "Create Couture Order",
     description: "Initialize bespoke garment production ticket",
     icon: ShoppingBag,
-    color: "#cf0046",
-    bg: "#fff1f2",
+    color: "#78070D",
+    bg: "#FBF2F3",
   },
   {
     id: "scan_tag",

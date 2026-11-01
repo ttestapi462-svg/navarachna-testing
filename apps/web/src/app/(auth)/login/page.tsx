@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import Image from "next/image";
+import { StudioBrandMark } from "@/components/brand/studio-logo";
+import { StudioLoader } from "@/components/brand/studio-loader";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -147,7 +148,7 @@ function LoginContent() {
   };
 
   return (
-    <div className="relative h-screen w-full flex flex-col justify-center items-center bg-[#FAF7F2] overflow-hidden selection:bg-[#C59B4E]/30 selection:text-[#581124] px-4">
+    <div className="relative h-screen w-full flex flex-col justify-center items-center bg-background overflow-hidden px-4">
       {/* Background Graphic Plate matching reference */}
       <div
         className="pointer-events-none absolute inset-0 z-0 bg-no-repeat bg-center bg-cover"
@@ -157,103 +158,80 @@ function LoginContent() {
       />
 
       {/* Main Container */}
-      <div className="relative z-10 w-full max-w-[436px] flex flex-col items-center -mt-2">
-        {/* Brand Logo Monogram - No Background (Transparent cream background & 3D Gold matching text) */}
-        <div className="mb-1 flex flex-col items-center select-none">
-          <div className="relative w-[102px] h-[102px] sm:w-[114px] sm:h-[114px] flex items-center justify-center drop-shadow-[0_4px_10px_rgba(88,17,36,0.22)] transition-transform duration-300 hover:scale-105">
-            <Image
-              src="/assets/navarachna-needle-gold-square.png"
-              alt="Navarachna Needle & Thread Monogram"
-              width={114}
-              height={114}
-              priority
-              className="object-contain w-full h-full"
-            />
-          </div>
-        </div>
-
-        {/* 3D Embossed Gold Brand Text from Official Logo (Preserved authentic gold design) */}
-        <div className="mb-2 flex flex-col items-center select-none">
-          <div className="relative w-[275px] sm:w-[300px] aspect-[799/308] drop-shadow-[0_2px_4px_rgba(88,17,36,0.28)] transition-transform duration-300 hover:scale-[1.01]">
-            <Image
-              src="/assets/navarachna-3d-text-perfect.png"
-              alt="Navarachna Designer Studio"
-              fill
-              priority
-              className="object-contain"
-            />
-          </div>
-
-          <p className="text-[#6E6862] font-sans text-[13px] sm:text-[13.5px] mt-0.5 font-normal">
+      <div className="relative z-10 w-full max-w-[370px] flex flex-col items-center py-4">
+        {/* Official Brand Logo Mark — Compact Atelier Crest */}
+        <div className="mb-2.5 flex flex-col items-center select-none text-center">
+          <StudioBrandMark variant="full" height={132} priority />
+          <p className="text-muted-foreground font-sans text-xs mt-1.5 font-normal tracking-wide">
             Sign in to continue to your account
           </p>
         </div>
 
-        {/* Login Card */}
-        <div className="w-full bg-white rounded-[22px] px-8 py-7 studio-card-shadow border border-white/60">
-          {/* Session Transfer / Expiry Alerts (Temporary: vanishes on page reload or dismiss) */}
+        {/* Login Card — Compact, Clean & Consistent with Atelier Design Rules */}
+        <div className="w-full bg-card text-card-foreground rounded-2xl p-5 sm:p-6 shadow-md shadow-black/4 border border-border/70 backdrop-blur-xs">
+          {/* Session Transfer / Expiry Alerts */}
           {displayedReason === "session_superseded" && (
-            <Alert className="mb-4 relative border-rose-200 bg-rose-50 text-slate-900 rounded-xl p-3 pr-8 shadow-xs animate-in fade-in duration-300">
-              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <Alert className="mb-3 relative border-rose-200 bg-rose-50 text-slate-900 rounded-lg p-2.5 pr-7 shadow-xs animate-in fade-in duration-300">
+              <AlertCircle className="size-3.5 text-rose-600 shrink-0" />
               <div>
-                <AlertTitle className="text-slate-900 text-xs font-semibold">
+                <AlertTitle className="text-slate-900 text-[11px] font-semibold">
                   Session Transferred
                 </AlertTitle>
-                <AlertDescription className="text-slate-600 text-[11px] mt-0.5">
+                <AlertDescription className="text-slate-600 text-[10px] mt-0.5">
                   Your account was logged in on another device.
                 </AlertDescription>
               </div>
               <button
                 type="button"
                 onClick={() => setDisplayedReason(null)}
-                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md"
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
                 aria-label="Dismiss notice"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="size-3" />
               </button>
             </Alert>
           )}
 
           {displayedReason === "expired" && (
-            <Alert className="mb-4 relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
-              <Lock className="h-4 w-4 text-slate-500 shrink-0" />
+            <Alert className="mb-3 relative rounded-lg border-border bg-muted/60 p-2.5 pr-7 shadow-xs animate-in fade-in duration-300">
+              <Lock className="size-3.5 text-muted-foreground shrink-0" />
               <div>
-                <AlertTitle className="text-slate-900 text-xs font-semibold">
+                <AlertTitle className="text-foreground text-[11px] font-semibold">
                   Session Expired
                 </AlertTitle>
-                <AlertDescription className="text-slate-600 text-[11px] mt-0.5">
+                <AlertDescription className="text-muted-foreground text-[10px] mt-0.5">
                   Please sign in again to continue.
                 </AlertDescription>
               </div>
               <button
                 type="button"
                 onClick={() => setDisplayedReason(null)}
-                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md"
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
                 aria-label="Dismiss notice"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="size-3" />
               </button>
             </Alert>
           )}
 
           {displayedReason === "session_terminated" && (
-            <Alert className="mb-4 relative rounded-xl border-slate-200 bg-slate-50 p-3 pr-8 shadow-xs animate-in fade-in duration-300">
-              <Lock className="h-4 w-4 text-slate-500 shrink-0" />
+            <Alert className="mb-3 relative rounded-lg border-border bg-muted/60 p-2.5 pr-7 shadow-xs animate-in fade-in duration-300">
+              <Lock className="size-3.5 text-muted-foreground shrink-0" />
               <div>
-                <AlertTitle className="text-slate-900 text-xs font-semibold">
+                <AlertTitle className="text-foreground text-[11px] font-semibold">
                   Signed Out
                 </AlertTitle>
-                <AlertDescription className="text-slate-600 text-[11px] mt-0.5">
+                <AlertDescription className="text-muted-foreground text-[10px] mt-0.5">
                   Your session has ended. Please sign in to resume.
                 </AlertDescription>
               </div>
               <button
                 type="button"
                 onClick={() => setDisplayedReason(null)}
-                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md"
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
                 aria-label="Dismiss notice"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="size-3" />
               </button>
             </Alert>
           )}
@@ -261,97 +239,97 @@ function LoginContent() {
           <form
             noValidate
             onSubmit={handleSubmit(onSubmit, onInvalid)}
-            className="space-y-4"
+            className="space-y-3.5"
           >
             {/* Error Notification */}
             {authError && (
-              <div className="p-2.5 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+              <div className="p-2 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+                <AlertCircle className="size-3.5 shrink-0 text-red-600" />
                 <span>{authError}</span>
               </div>
             )}
 
             {/* Username / Identifier Field */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label
                 htmlFor="identifier"
-                className="block text-[13px] font-medium text-slate-700"
+                className="block text-xs font-medium text-foreground/90"
               >
                 Username
               </label>
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
-                  <UserIcon className="h-4 w-4 stroke-[1.6]" />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none flex items-center">
+                  <UserIcon className="size-3.5 stroke-[1.8]" />
                 </div>
                 <input
                   {...register("identifier")}
                   id="identifier"
                   type="text"
                   placeholder="Enter your username"
-                  className="w-full h-[46px] pl-10 pr-3.5 rounded-lg border border-slate-200 bg-white text-slate-800 text-[13.5px] placeholder:text-slate-400 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E] transition-all duration-150"
+                  className="w-full h-9.5 pl-8.5 pr-3 rounded-lg border border-input bg-background/50 text-foreground text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all duration-150"
                 />
               </div>
               {errors.identifier && (
-                <p className="text-xs text-red-500 mt-1">
+                <p className="text-[11px] text-destructive mt-0.5">
                   {errors.identifier.message}
                 </p>
               )}
             </div>
 
             {/* Password Field */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label
                 htmlFor="password"
-                className="block text-[13px] font-medium text-slate-700"
+                className="block text-xs font-medium text-foreground/90"
               >
                 Password
               </label>
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
-                  <Lock className="h-4 w-4 stroke-[1.6]" />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none flex items-center">
+                  <Lock className="size-3.5 stroke-[1.8]" />
                 </div>
                 <input
                   {...register("password")}
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
-                  className="w-full h-[46px] pl-10 pr-10 rounded-lg border border-slate-200 bg-white text-slate-800 text-[13.5px] placeholder:text-slate-400 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E] transition-all duration-150"
+                  className="w-full h-9.5 pl-8.5 pr-8.5 rounded-lg border border-input bg-background/50 text-foreground text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all duration-150"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex={-1}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground transition-colors p-1 cursor-pointer"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 stroke-[1.6]" />
+                    <EyeOff className="size-3.5 stroke-[1.8]" />
                   ) : (
-                    <Eye className="h-4 w-4 stroke-[1.6]" />
+                    <Eye className="size-3.5 stroke-[1.8]" />
                   )}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-red-500 mt-1">
+                <p className="text-[11px] text-destructive mt-0.5">
                   {errors.password.message}
                 </p>
               )}
             </div>
 
             {/* Remember me & Forgot Password Row */}
-            <div className="flex items-center justify-between text-[13px] pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none group">
+            <div className="flex items-center justify-between text-xs pt-0.5">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none group">
                 <div
                   onClick={() => setRememberMe(!rememberMe)}
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition-all duration-150 ${
+                  className={`size-3.5 rounded flex items-center justify-center border transition-all duration-150 ${
                     rememberMe
-                      ? "bg-[#C59B4E] border-[#C59B4E] text-white shadow-xs"
-                      : "border-slate-300 bg-white group-hover:border-slate-400"
+                      ? "bg-brand-gold border-brand-gold text-white shadow-xs"
+                      : "border-input bg-background/50 group-hover:border-slate-400"
                   }`}
                 >
-                  {rememberMe && <Check className="h-3 w-3 stroke-[3]" />}
+                  {rememberMe && <Check className="size-2.5 stroke-[3]" />}
                 </div>
-                <span className="text-slate-600 group-hover:text-slate-800 transition-colors text-[13px]">
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors text-xs">
                   Remember me
                 </span>
               </label>
@@ -359,7 +337,7 @@ function LoginContent() {
               <button
                 type="button"
                 onClick={() => setShowForgotModal(true)}
-                className="text-[#C59B4E] hover:text-[#A88038] font-normal transition-colors underline underline-offset-4 decoration-[#C59B4E]/40 hover:decoration-[#C59B4E] text-[13px] cursor-pointer"
+                className="text-brand-gold hover:text-brand-gold-hover font-normal transition-colors underline underline-offset-4 decoration-brand-gold/40 hover:decoration-brand-gold text-xs cursor-pointer"
               >
                 Forgot Password?
               </button>
@@ -369,17 +347,17 @@ function LoginContent() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full h-12 mt-2 rounded-lg bg-[#581124] hover:bg-[#480E1D] active:bg-[#3C0A17] disabled:opacity-70 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition-all duration-150 cursor-pointer disabled:cursor-not-allowed"
+              className="w-full h-9.5 mt-1 rounded-lg bg-primary hover:bg-brand-maroon-hover active:bg-brand-maroon-active disabled:opacity-70 text-primary-foreground font-medium text-xs flex items-center justify-center gap-2 shadow-xs transition-all duration-150 cursor-pointer disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <Loader2 className="size-3.5 animate-spin text-white" />
                   <span>Signing In...</span>
                 </>
               ) : (
                 <>
                   <span>Sign In</span>
-                  <ArrowRight className="h-4 w-4 stroke-[2]" />
+                  <ArrowRight className="size-3.5 stroke-[2]" />
                 </>
               )}
             </button>
@@ -412,7 +390,7 @@ function LoginContent() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#581124] hover:bg-[#480E1D] text-white"
+              className="bg-primary hover:bg-brand-maroon-hover text-primary-foreground"
               onClick={() => {
                 handleSubmit((values) => performLogin(values, true))();
               }}
@@ -426,9 +404,9 @@ function LoginContent() {
       {/* Forgot Password Modal */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100 space-y-4">
+          <div className="bg-card text-card-foreground rounded-2xl max-w-sm w-full p-6 shadow-xl border border-border space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-serif text-lg font-semibold text-[#581124]">
+              <h3 className="font-serif text-lg font-semibold text-primary">
                 Reset Password
               </h3>
               <button
@@ -458,7 +436,7 @@ function LoginContent() {
                     setShowForgotModal(false);
                     setForgotSubmitted(false);
                   }}
-                  className="w-full h-9 rounded-lg bg-[#581124] text-white text-xs font-medium mt-2"
+                  className="w-full h-9 rounded-lg bg-primary hover:bg-brand-maroon-hover text-primary-foreground text-xs font-medium mt-2"
                 >
                   Back to Sign In
                 </button>
@@ -481,7 +459,7 @@ function LoginContent() {
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     placeholder="name@navarachna.com"
-                    className="w-full h-10 px-3 rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#C59B4E] focus:ring-1 focus:ring-[#C59B4E]"
+                    className="w-full h-10 px-3 rounded-lg border border-input bg-card text-xs text-foreground focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
                   />
                 </div>
                 <div className="flex gap-2 pt-2">
@@ -494,7 +472,7 @@ function LoginContent() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 h-9 rounded-lg bg-[#581124] hover:bg-[#480E1D] text-white text-xs font-medium shadow-xs"
+                    className="flex-1 h-9 rounded-lg bg-primary hover:bg-brand-maroon-hover text-primary-foreground text-xs font-medium shadow-xs"
                   >
                     Send Link
                   </button>
@@ -511,11 +489,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense
-      fallback={
-        <div className="h-screen w-screen flex items-center justify-center bg-[#FAF7F2]">
-          <Loader2 className="h-8 w-8 animate-spin text-[#581124]" />
-        </div>
-      }
+      fallback={<StudioLoader size={120} />}
     >
       <LoginContent />
     </Suspense>

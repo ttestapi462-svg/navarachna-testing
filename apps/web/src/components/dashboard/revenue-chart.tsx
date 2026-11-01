@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { THEME_COLORS } from "@/lib/theme";
 
 const chartData = [
   { month: "Jan", orders: 28, revenue: 14500 },
@@ -36,7 +37,7 @@ export function RevenueChart({ className }: { className?: string }) {
           Atelier Revenue & Performance
         </CardTitle>
         <CardDescription>
-          Monthly revenue trajectory rendered with Rose preset theme
+          Monthly couture revenue trajectory rendered with Atelier Wine & Gold theme
         </CardDescription>
       </CardHeader>
       <CardContent className="h-72">
@@ -44,8 +45,8 @@ export function RevenueChart({ className }: { className?: string }) {
           <AreaChart data={chartData}>
             <defs>
               <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#e11d48" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#e11d48" stopOpacity={0} />
+                <stop offset="5%" stopColor={THEME_COLORS.brand.maroon} stopOpacity={0.8} />
+                <stop offset="95%" stopColor={THEME_COLORS.brand.maroon} stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
@@ -69,7 +70,7 @@ export function RevenueChart({ className }: { className?: string }) {
             <Area
               type="monotone"
               dataKey="revenue"
-              stroke="#e11d48"
+              stroke={THEME_COLORS.brand.maroon}
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorRev)"

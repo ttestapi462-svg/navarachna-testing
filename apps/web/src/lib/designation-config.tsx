@@ -26,9 +26,9 @@ export const DESIGNATION_CONFIG: Record<string, DesignationMeta> = {
     label: "Studio Receptionist",
     icon: ConciergeBell,
     badgeClass:
-      "bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/40",
-    iconColor: "text-rose-600 dark:text-rose-400",
-    bgLight: "bg-rose-100/70 dark:bg-rose-900/40",
+      "bg-primary/10 text-primary border-primary/20 dark:bg-primary/20 dark:text-primary-foreground dark:border-primary/40",
+    iconColor: "text-primary dark:text-primary-foreground",
+    bgLight: "bg-primary/15 dark:bg-primary/30",
   },
   "Floor Supervisor": {
     label: "Floor Supervisor",

@@ -9,21 +9,51 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Navarachna Atelier Crimson Theme
+        // Navarachna Atelier Crimson Theme (#78070D)
         primary: {
-          DEFAULT: "#9E1B38",
+          DEFAULT: "#78070D",
           foreground: "#ffffff",
-          50: "#fff1f3",
-          100: "#ffe4e8",
-          200: "#fecdd6",
-          300: "#fda4b8",
-          400: "#fb7193",
-          500: "#d91e4a",
-          600: "#9e1b38",
-          700: "#80142c",
-          800: "#640f22",
-          900: "#4a0b19",
-          950: "#2d040d",
+          50: "#fdf8f8",
+          100: "#fbf2f3",
+          200: "#f5d6d8",
+          300: "#ebb0b4",
+          400: "#d66b72",
+          500: "#a81e27",
+          600: "#78070D",
+          700: "#63060B",
+          800: "#4A0408",
+          900: "#2D050F",
+          950: "#1F0207",
+        },
+        // Navarachna Atelier Gold System
+        gold: {
+          DEFAULT: "#C59B4E",
+          foreground: "#231E1C",
+          highlight: "#E0B159",
+          hover: "#B58838",
+          active: "#8E6339",
+          light: "#FAF2E2",
+          tint: "rgba(197, 155, 78, 0.15)",
+        },
+        // Brand Semantic Tokens
+        brand: {
+          maroon: "#78070D",
+          "maroon-hover": "#63060B",
+          "maroon-active": "#4A0408",
+          "maroon-light": "rgba(120, 7, 13, 0.08)",
+          "maroon-subtle": "rgba(120, 7, 13, 0.04)",
+          gold: "#C59B4E",
+          "gold-highlight": "#E0B159",
+          "gold-hover": "#B58838",
+          "gold-active": "#8E6339",
+          "gold-light": "#FAF2E2",
+          ivory: "#FAF7F2",
+          cream: "#F5EFE6",
+          charcoal: "#231E1C",
+          stone: "#6E6862",
+          "stone-light": "#9B958F",
+          border: "#E8E2D8",
+          "border-soft": "#F2ECE2",
         },
         // Navarachna Atelier Midnight Navy Theme
         navy: {
@@ -41,7 +71,7 @@ module.exports = {
           900: "#14172f",
           950: "#0b0c1a",
         },
-        // Preset b51GFh7y6 Mist Palette
+        // Preset Mist Palette
         mist: {
           50: "#f8fafc",
           100: "#f1f5f9",

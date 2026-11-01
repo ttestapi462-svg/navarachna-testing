@@ -329,9 +329,9 @@ function EmployeeFormDialogContent({
       className="flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] sm:max-w-xl md:max-w-2xl flex-col overflow-hidden p-0 gap-0 rounded-2xl border border-border/80 shadow-2xl bg-card animate-in fade-in-0 zoom-in-98 duration-100"
     >
         {/* Sticky Header with Light Pink Atelier Brand Identity */}
-        <DialogHeader className="bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40 sticky top-0 z-10 border-b border-rose-200/70 dark:border-rose-900/40 px-5 py-3 sm:py-3.5 text-left flex flex-row items-center justify-between gap-3 shadow-2xs">
+        <DialogHeader className="bg-gradient-to-r from-primary/10 via-accent/25 to-background sticky top-0 z-10 border-b border-border px-5 py-3 sm:py-3.5 text-left flex flex-row items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-rose-200/90 dark:border-rose-900/60 shadow-xs shrink-0">
+            <div className="flex size-8 items-center justify-center rounded-full bg-white dark:bg-card text-primary border border-border/80 shadow-xs shrink-0">
               {isEdit ? (
                 <UserRoundPen className="size-4 stroke-[1.8]" />
               ) : (

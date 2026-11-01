@@ -19,7 +19,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import type { ScrollViewInstance } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "expo-router";
 import {
@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
+  CirclePlus,
   ChevronRight,
   Eye,
   FileImage,
@@ -39,7 +40,7 @@ import {
   Pencil,
   Phone,
   Plus,
-  Receipt,
+  ReceiptText,
   Search,
   Trash2,
   User,
@@ -157,12 +158,12 @@ const PAGE_SIZE = 10;
 const EXPENSE_CARD_GAP = 6;
 const LOAD_MORE_FOOTER_HEIGHT = 64;
 const MAX_BILL_SIZE = 5 * 1024 * 1024;
-const PRIMARY = "#e11d48";
-const TEXT = "#17172B";
-const TEXT_MUTED = "#7B8497";
-const BORDER = "#E9EAF1";
+const PRIMARY = "#78070D";
+const TEXT = "#231E1C";
+const TEXT_MUTED = "#6E6862";
+const BORDER = "#E8E2D8";
 const SURFACE = "#FFFFFF";
-const BACKGROUND = "#F7F7FB";
+const BACKGROUND = "#FAF7F2";
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
 function localIsoToday() {
@@ -260,7 +261,7 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
     };
     const page = new Blob(
       [
-        `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save bill</title><style>body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:24px;color:#0f172a}a{display:block;margin:16px 0;padding:14px;border-radius:12px;background:#e11d48;color:white;text-align:center;text-decoration:none;font-weight:700}.hint{color:#475569;line-height:1.5}</style></head><body><h2>Save your bill</h2><p>${escapeHtml(filename)}</p><p class="hint">Tap “Open bill” if Save does not start. In the opened file, use Share and choose “Save to Files”.</p><a href="${objectUrl}" download="${escapeHtml(filename)}">Save bill</a><a href="${objectUrl}" target="_blank" rel="noopener">Open bill</a></body></html>`,
+        `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save bill</title><style>body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:24px;color:#0f172a}a{display:block;margin:16px 0;padding:14px;border-radius:12px;background:#78070D;color:white;text-align:center;text-decoration:none;font-weight:700}.hint{color:#475569;line-height:1.5}</style></head><body><h2>Save your bill</h2><p>${escapeHtml(filename)}</p><p class="hint">Tap “Open bill” if Save does not start. In the opened file, use Share and choose “Save to Files”.</p><a href="${objectUrl}" download="${escapeHtml(filename)}">Save bill</a><a href="${objectUrl}" target="_blank" rel="noopener">Open bill</a></body></html>`,
       ],
       { type: "text/html" }
     );
@@ -333,7 +334,7 @@ export default function ExpenseManagementScreen() {
   const [specialistSearch, setSpecialistSearch] = useState("");
   const [specialistOptionsOpen, setSpecialistOptionsOpen] = useState(false);
   const [draftSourcingSpecialistIds, setDraftSourcingSpecialistIds] = useState<number[]>([]);
-  const formScrollRef = useRef<ScrollViewInstance | null>(null);
+  const formScrollRef = useRef<any>(null);
   const formViewportHeightRef = useRef(0);
   const formFieldLayoutsRef = useRef<Record<string, { y: number; height: number }>>({});
   const activeFormFieldRef = useRef<string | null>(null);
@@ -382,6 +383,7 @@ export default function ExpenseManagementScreen() {
   const [billLoading, setBillLoading] = useState(false);
   const billLoadingRef = useRef(false);
   const billPreviewRequestRef = useRef<AbortController | null>(null);
+  const returnToDetailRef = useRef(false);
   const [billPreviewVisible, setBillPreviewVisible] = useState(false);
   const [billPreviewUrl, setBillPreviewUrl] = useState<string | null>(null);
   const [billPreviewIsPdf, setBillPreviewIsPdf] = useState(false);
@@ -1151,6 +1153,7 @@ export default function ExpenseManagementScreen() {
     const request = new AbortController();
     billPreviewRequestRef.current = request;
     billLoadingRef.current = true;
+    returnToDetailRef.current = true;
     setActiveExpense(expense);
     // Avoid stacking two native Modal windows. On iOS/Expo Go the detail sheet
     // can remain the active presentation and intercept touches on the preview.
@@ -1226,7 +1229,7 @@ export default function ExpenseManagementScreen() {
     }
   };
 
-  const closeBillPreview = () => {
+  const closeBillPreview = async () => {
     billPreviewRequestRef.current?.abort();
     billPreviewRequestRef.current = null;
     billLoadingRef.current = false;
@@ -1239,6 +1242,14 @@ export default function ExpenseManagementScreen() {
     setBillPreviewPdfBase64(null);
     setBillPreviewPdfImage(null);
     setBillPreviewIsPdf(false);
+
+    if (returnToDetailRef.current) {
+      returnToDetailRef.current = false;
+      if (Platform.OS !== "web") {
+        await new Promise((resolve) => setTimeout(resolve, 220));
+      }
+      setDetailVisible(true);
+    }
   };
 
   const viewBill = async (expense?: Expense) => {
@@ -1553,13 +1564,13 @@ export default function ExpenseManagementScreen() {
       <AtelierHeader
         title="Expense management"
         showProfile={false}
-        backgroundColor="#F9D2DC"
+        backgroundColor="#FAF7F2"
         barStyle={styles.expenseHeaderBar}
         brandContainerStyle={styles.expenseHeaderBrand}
         preserveTitleSize
         brandMarkStyle={styles.expenseBrandMark}
         brandTitleStyle={styles.expenseBrandTitle}
-        icon={<Receipt size={32} color="#BE123C" strokeWidth={2.6} />}
+        icon={<ReceiptText size={26} color="#78070D" strokeWidth={2.4} />}
         rightAction={
           <TouchableOpacity
             style={styles.headerAddButton}
@@ -1568,7 +1579,7 @@ export default function ExpenseManagementScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add expense"
           >
-            <Plus size={19} color="#ffffff" strokeWidth={2.5} />
+            <Plus size={20} color="#ffffff" strokeWidth={2.6} />
           </TouchableOpacity>
         }
       />
@@ -1991,7 +2002,11 @@ export default function ExpenseManagementScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeadingRow}>
                 <View style={styles.modalHeadingPrefix}>
-                  <Receipt size={18} color={PRIMARY} />
+                  {editing ? (
+                    <Pencil size={18} color={PRIMARY} strokeWidth={2.3} />
+                  ) : (
+                    <CirclePlus size={18} color={PRIMARY} strokeWidth={2.3} />
+                  )}
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.modalTitle}>
@@ -2005,7 +2020,7 @@ export default function ExpenseManagementScreen() {
                 activeOpacity={0.7}
                 accessibilityLabel="Close form"
               >
-                <X size={17} color={TEXT_MUTED} />
+                <X size={18} color={TEXT_MUTED} />
               </TouchableOpacity>
             </View>
 
@@ -2727,7 +2742,7 @@ export default function ExpenseManagementScreen() {
           <View
             style={[
               styles.modalCard,
-              { paddingBottom: Math.max(insets.bottom, 16) + 12 },
+              { paddingBottom: Math.max(insets.bottom, 10) },
             ]}
           >
             <View style={styles.sheetHandleRow}>
@@ -2735,8 +2750,13 @@ export default function ExpenseManagementScreen() {
             </View>
 
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                <Text style={styles.modalTitle}>Expense details</Text>
+              <View style={styles.modalHeadingRow}>
+                <View style={styles.modalHeadingPrefix}>
+                  <ReceiptText size={18} color={PRIMARY} strokeWidth={2.3} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                  <Text style={styles.modalTitle}>Expense details</Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.closeButton}
@@ -2760,9 +2780,9 @@ export default function ExpenseManagementScreen() {
                 }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                  paddingHorizontal: 16,
+                  paddingHorizontal: 14,
                   paddingTop: 12,
-                  paddingBottom: 20,
+                  paddingBottom: 4,
                   gap: 0,
                 }}
               >
@@ -2843,11 +2863,11 @@ export default function ExpenseManagementScreen() {
                       backgroundColor: SURFACE,
                       borderRadius: 14,
                       paddingHorizontal: 12,
-                      paddingVertical: 14,
-                      marginBottom: 18,
+                      paddingVertical: 12,
+                      marginBottom: 12,
                       borderWidth: 1,
                       borderColor: BORDER,
-                      gap: 10,
+                      gap: 8,
                     }}
                   >
                     {/* icon */}
@@ -2869,17 +2889,17 @@ export default function ExpenseManagementScreen() {
                     </View>
                     {/* View receipt — icon only */}
                     <TouchableOpacity
-                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFC2D5" }}
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFC2D5" }}
                       onPress={() => void openBillPreview(activeExpense)}
                       activeOpacity={0.75}
                       accessibilityRole="button"
                       accessibilityLabel="View receipt"
                     >
-                      <Eye size={16} color={PRIMARY} />
+                      <Eye size={18} color={PRIMARY} />
                     </TouchableOpacity>
                     {/* Download icon only — no label */}
                     <TouchableOpacity
-                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center" }}
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center" }}
                       onPress={() => void downloadBill(activeExpense)}
                       disabled={billLoading}
                       activeOpacity={0.75}
@@ -2889,12 +2909,12 @@ export default function ExpenseManagementScreen() {
                       {billLoading ? (
                         <ActivityIndicator size="small" color="#ffffff" />
                       ) : (
-                        <ArrowDownToLine size={16} color="#ffffff" />
+                        <ArrowDownToLine size={18} color="#ffffff" />
                       )}
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: BACKGROUND, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 18, borderWidth: 1, borderColor: BORDER }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: BACKGROUND, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
                     <FileText size={16} color={TEXT_MUTED} />
                     <Text style={{ fontSize: 12.5, color: TEXT_MUTED, fontStyle: "italic" }}>No receipt attached</Text>
                   </View>
@@ -2957,17 +2977,30 @@ export default function ExpenseManagementScreen() {
               <View style={styles.sheetHandle} />
             </View>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                <Text style={styles.modalTitle} numberOfLines={1}>
-                  {activeExpense?.billFileName || "Bill preview"}
-                </Text>
-                <Text style={styles.modalSubtitle}>Receipt preview</Text>
+              <View style={styles.modalHeadingRow}>
+                <TouchableOpacity
+                  style={styles.modalHeadingPrefix}
+                  onPress={closeBillPreview}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to expense details"
+                >
+                  <ChevronLeft size={20} color={PRIMARY} />
+                </TouchableOpacity>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    {activeExpense?.billFileName || "Bill preview"}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>Receipt preview</Text>
+                </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={closeBillPreview}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close and return to details"
                 >
                   <X size={17} color={TEXT_MUTED} />
                 </TouchableOpacity>
@@ -2993,7 +3026,7 @@ export default function ExpenseManagementScreen() {
                     originWhitelist={["*"]}
                     javaScriptEnabled
                     style={styles.pdfRenderWorker}
-                    onMessage={(event) => {
+                    onMessage={(event: any) => {
                       const value = event.nativeEvent.data;
                       if (value.startsWith("data:image/png;base64,")) {
                         setBillPreviewPdfImage(value);
@@ -3204,9 +3237,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   headerAddButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
@@ -3214,41 +3247,40 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: PRIMARY,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowOpacity: 0.25,
+        shadowRadius: 3,
       },
       default: {
-        boxShadow: "0 2px 6px rgba(225, 29, 72, 0.3)",
+        boxShadow: "0 2px 5px rgba(120, 7, 13, 0.22)",
       },
     }),
   },
   expenseBrandMark: {
-    backgroundColor: "transparent",
-    borderColor: "transparent",
-    borderWidth: 0,
-    borderRadius: 0,
-    width: 42,
-    height: 42,
-    shadowColor: "transparent",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
-    boxShadow: "none",
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   expenseHeaderBar: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
+    height: 44,
   },
   expenseHeaderBrand: {
-    gap: 8,
+    gap: 10,
+    alignItems: "center",
   },
   expenseBrandTitle: {
-    marginRight: 8,
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: "900",
-    color: "#881337",
-    letterSpacing: -0.6,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "800",
+    color: "#78070D",
+    letterSpacing: -0.4,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        textAlignVertical: "center",
+      },
+    }),
   },
   fixedTopSection: {
     paddingHorizontal: 16,
@@ -3902,9 +3934,10 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800",
-    color: TEXT,
+    color: PRIMARY,
+    letterSpacing: -0.2,
   },
   modalSubtitle: {
     fontSize: 11.5,
@@ -3919,9 +3952,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   modalHeadingPrefix: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: "#FFF0F5",
     alignItems: "center",
     justifyContent: "center",
@@ -3933,9 +3966,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: BACKGROUND,
     borderWidth: 1,
     borderColor: BORDER,
@@ -4038,9 +4071,10 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE,
   },
   filterClear: {
-    paddingHorizontal: 14,
-    height: 40,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    minWidth: 90,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -4050,9 +4084,10 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
   applyButton: {
-    paddingHorizontal: 20,
-    height: 40,
-    borderRadius: 12,
+    paddingHorizontal: 22,
+    minWidth: 120,
+    height: 42,
+    borderRadius: 14,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
@@ -4299,10 +4334,10 @@ const styles = StyleSheet.create({
     borderTopColor: BORDER,
   },
   cancelButtonOutlineRed: {
-    minWidth: 82,
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
+    minWidth: 96,
+    height: 42,
+    paddingHorizontal: 18,
+    borderRadius: 21,
     borderWidth: 1.5,
     borderColor: PRIMARY,
     backgroundColor: "#ffffff",
@@ -4311,67 +4346,67 @@ const styles = StyleSheet.create({
   },
   cancelTextOutlineRed: {
     color: PRIMARY,
-    fontSize: 12.5,
-    fontWeight: "600",
+    fontSize: 13.5,
+    fontWeight: "700",
   },
   saveButtonPrimary: {
-    minWidth: 126,
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
+    minWidth: 140,
+    height: 42,
+    paddingHorizontal: 20,
+    borderRadius: 21,
     backgroundColor: "#16a34a",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
   },
   saveButtonPrimaryText: {
     color: "#ffffff",
-    fontSize: 12.5,
-    fontWeight: "600",
+    fontSize: 13.5,
+    fontWeight: "700",
   },
   detailActionFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 10,
-    paddingTop: 18,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
   actionIconButtonEdit: {
-    minWidth: 88,
-    height: 38,
-    paddingHorizontal: 13,
-    borderRadius: 19,
+    minWidth: 104,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
     borderWidth: 1.5,
     borderColor: "#D8DCE7",
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 7,
+    gap: 8,
   },
   actionIconButtonDelete: {
-    minWidth: 100,
-    height: 38,
-    paddingHorizontal: 13,
-    borderRadius: 19,
+    minWidth: 104,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
     backgroundColor: SURFACE,
     borderWidth: 1.5,
     borderColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 7,
+    gap: 8,
   },
   detailActionText: {
     color: TEXT,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
   },
   detailActionDeleteText: {
     color: PRIMARY,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
   },
   cancelButton: {

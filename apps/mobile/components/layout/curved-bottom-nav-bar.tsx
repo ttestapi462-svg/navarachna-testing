@@ -257,8 +257,8 @@ export function CurvedBottomNavBar({
           style={styles.svgBar}
           pointerEvents="none"
         >
-          <Path d={scoopPath} fill="#F7F7FB" />
-          <Path d={barPath} fill="#e11d48" />
+          <Path d={scoopPath} fill="#FAF7F2" />
+          <Path d={barPath} fill="#78070D" />
         </Svg>
 
         {/* Floating Raised Circular Action Button */}
@@ -425,9 +425,9 @@ const styles = StyleSheet.create({
     width: BUBBLE_SIZE,
     height: BUBBLE_SIZE,
     borderRadius: BUBBLE_RADIUS,
-    backgroundColor: "#e11d48",
+    backgroundColor: "#78070D",
     borderWidth: 2.5,
-    borderColor: "#ffffff",
+    borderColor: "#E0B159",
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({

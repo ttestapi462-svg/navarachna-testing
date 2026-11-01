@@ -4,20 +4,26 @@ import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { Layers } from "lucide-react-native";
-import { HEADER_BAR_HEIGHT } from "../../constants/layout";
-import { mobileTheme } from "../../constants/theme";
+import { ArrowLeft } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { StudioLogoIcon } from "../brand/StudioLogo";
 
 export interface AtelierHeaderProps {
   title?: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  showBack?: boolean;
+  onBack?: () => void;
+  leftItem?: React.ReactNode;
+  rightAction?: React.ReactNode;
+  children?: React.ReactNode;
+  headerStyle?: StyleProp<ViewStyle>;
+  gradientColors?: readonly [string, string, ...string[]];
+  align?: "center" | "left";
   userName?: string;
   isOnline?: boolean;
   onPressProfile?: () => void;
-  onPressScan?: () => void;
-  onPressAction?: () => void;
-  rightAction?: React.ReactNode;
   showProfile?: boolean;
-  icon?: React.ReactNode;
   compactBrand?: boolean;
   backgroundColor?: string;
   brandMarkStyle?: StyleProp<ViewStyle>;
@@ -28,14 +34,21 @@ export interface AtelierHeaderProps {
 }
 
 export function AtelierHeader({
-  title = "Navarachna Atelier",
-  userName = "Atelier Staff",
+  title = "Navarachna Studio",
+  subtitle,
+  icon,
+  showBack = false,
+  onBack,
+  leftItem,
+  rightAction,
+  children,
+  headerStyle,
+  gradientColors,
+  align = "center",
+  userName = "Master Priya",
   isOnline = true,
   onPressProfile,
-  rightAction,
-  showProfile = true,
-  icon,
-  compactBrand = false,
+  showProfile = false,
   backgroundColor,
   brandMarkStyle,
   brandTitleStyle,
@@ -44,8 +57,8 @@ export function AtelierHeader({
   preserveTitleSize = false,
 }: AtelierHeaderProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  // Compute initials (e.g. "Master Priya" -> "MP")
   const initials =
     userName
       .split(" ")
@@ -55,163 +68,292 @@ export function AtelierHeader({
       .join("")
       .toUpperCase() || "NA";
 
+  const topInset = insets.top > 0 ? insets.top + 6 : 48;
+  const isLeftAligned = align === "left" || Boolean(brandContainerStyle);
+
+  // Soft Royal Crimson gradient wash fading down, exactly matching Tailoring App signature gradient
+  const defaultColors: readonly [string, string] = [
+    "rgba(251, 235, 237, 0.95)",
+    "rgba(250, 247, 242, 0)",
+  ];
+  const colorsToUse = gradientColors || (backgroundColor ? [backgroundColor, backgroundColor] : defaultColors);
+
   return (
     <>
       <StatusBar style="dark" />
-      <View
-        style={[styles.headerGradient, { paddingTop: insets.top > 0 ? insets.top + 2 : 12 }]}
+      <LinearGradient
+        colors={colorsToUse}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: topInset }, headerStyle]}
       >
-        <LinearGradient
-          pointerEvents="none"
-          colors={[backgroundColor || "#F9D2DC", "#FCE7EC", "#F7F7FB"]}
-          locations={[0, 0.48, 1]}
-          style={styles.ambientWash}
-        />
-        <View style={[styles.bar, barStyle]}>
-          {/* Left: Brand Crest / Feature Icon & Studio Title */}
-          <View style={[styles.brandContainer, brandContainerStyle]}>
-            <View style={[styles.logoTile, compactBrand && styles.compactLogoTile, brandMarkStyle]}>
-              {icon || <Layers size={19} color="#ffffff" strokeWidth={2.3} />}
-            </View>
-            <Text style={[styles.brandTitle, compactBrand && styles.compactBrandTitle, brandTitleStyle]} numberOfLines={1} adjustsFontSizeToFit={!preserveTitleSize} minimumFontScale={0.8}>
-              {title}
-            </Text>
-          </View>
-
-          {/* Right: Actions & Clean Profile Avatar with integrated Live Status indicator */}
-          <View style={styles.rightContainer}>
-            {rightAction}
-            {showProfile && (
-              <TouchableOpacity
-                onPress={onPressProfile}
-                activeOpacity={0.8}
-                style={styles.avatarTouchable}
-                accessibilityLabel={`Operator profile: ${userName}`}
-              >
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarText}>{initials}</Text>
+        <View style={[styles.navHeaderRow, barStyle]}>
+          {isLeftAligned ? (
+            /* Left-Aligned Layout (e.g. for custom action bar or legacy flex) */
+            <>
+              <View style={[styles.leftBrandContainer, brandContainerStyle]}>
+                {icon ? (
+                  <View style={[styles.leftIconWrapper, brandMarkStyle]}>{icon}</View>
+                ) : (
+                  <View style={[styles.headerBrandBadge, brandMarkStyle]}>
+                    <StudioLogoIcon size={26} />
+                  </View>
+                )}
+                <View style={styles.titleColumn}>
+                  <Text
+                    style={[styles.richScreenTitle, brandTitleStyle]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={!preserveTitleSize}
+                    minimumFontScale={0.8}
+                  >
+                    {title}
+                  </Text>
+                  {subtitle ? (
+                    <Text style={styles.headerSubtitle} numberOfLines={1}>
+                      {subtitle}
+                    </Text>
+                  ) : null}
                 </View>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: isOnline ? "#10b981" : "#cbd5e1" },
-                  ]}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
+              </View>
+
+              <View style={styles.headerActionsWrapper}>
+                {rightAction}
+                {showProfile && (
+                  <TouchableOpacity
+                    onPress={onPressProfile || (() => router.navigate("/(tabs)/more"))}
+                    activeOpacity={0.75}
+                    style={styles.headerAvatarBtn}
+                    accessibilityLabel={`Operator profile: ${userName}`}
+                  >
+                    <View style={styles.avatarCircle}>
+                      <Text style={styles.avatarText}>{initials}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: isOnline ? "#10b981" : "#9B958F" },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          ) : (
+            /* Tailoring App Signature Centered Navigation Layout */
+            <>
+              {/* Left Slot: Back Button or Brand Emblem */}
+              {leftItem ? (
+                leftItem
+              ) : showBack ? (
+                <TouchableOpacity
+                  onPress={onBack || (() => (router.canGoBack() ? router.back() : router.replace("/(tabs)")))}
+                  style={styles.headerIconBtn}
+                  activeOpacity={0.7}
+                >
+                  <ArrowLeft size={22} color="#1E293B" />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.headerBrandBadge}>
+                  <StudioLogoIcon size={26} />
+                </View>
+              )}
+
+              {/* Center Title Slot: Centered Title with Prefix Icon */}
+              <View style={styles.centerTitleWrapper} pointerEvents="none">
+                <View style={styles.centerTitleRow}>
+                  {icon ? <View style={styles.titlePrefixIcon}>{icon}</View> : null}
+                  <Text
+                    style={[styles.richScreenTitle, brandTitleStyle]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={!preserveTitleSize}
+                    minimumFontScale={0.8}
+                  >
+                    {title}
+                  </Text>
+                </View>
+                {subtitle ? (
+                  <Text style={styles.headerSubtitle} numberOfLines={1}>
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Right Slot: Actions or Avatar */}
+              <View style={styles.headerActionsWrapper}>
+                {rightAction ? (
+                  rightAction
+                ) : showProfile ? (
+                  <TouchableOpacity
+                    onPress={onPressProfile || (() => router.navigate("/(tabs)/more"))}
+                    activeOpacity={0.75}
+                    style={styles.headerAvatarBtn}
+                    accessibilityLabel={`Operator profile: ${userName}`}
+                  >
+                    <View style={styles.avatarCircle}>
+                      <Text style={styles.avatarText}>{initials}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: isOnline ? "#10b981" : "#9B958F" },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.headerPlaceholder} />
+                )}
+              </View>
+            </>
+          )}
         </View>
-      </View>
+
+        {children}
+      </LinearGradient>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  ambientWash: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 156,
-  },
   headerGradient: {
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     width: "100%",
-    paddingBottom: 10,
-    backgroundColor: "transparent",
   },
-  bar: {
-    minHeight: HEADER_BAR_HEIGHT + 2,
-    paddingHorizontal: 18,
+  navHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    position: "relative",
+    height: 44,
   },
-  brandContainer: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
+  headerIconBtn: {
+    padding: 6,
+    justifyContent: "center",
     alignItems: "center",
-    gap: 13,
+    marginLeft: 2,
   },
-  rightContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flexShrink: 0,
-  },
-  logoTile: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: mobileTheme.color.primary,
+  headerBrandBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: mobileTheme.color.primary,
+    borderColor: "rgba(120, 7, 13, 0.12)",
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
       ios: {
-        shadowColor: mobileTheme.color.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.16,
-        shadowRadius: 4,
+        shadowColor: "#78070D",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
       },
       default: {
-        boxShadow: "0 2px 5px rgba(225, 29, 72, 0.14)",
+        elevation: 1,
       },
     }),
   },
-  compactLogoTile: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+  centerTitleWrapper: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 60,
   },
-  brandTitle: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: mobileTheme.color.ink,
-    letterSpacing: -0.45,
-    flexShrink: 1,
+  centerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
-  compactBrandTitle: {
-    fontSize: 17,
+  titlePrefixIcon: {
+    alignItems: "center",
+    justifyContent: "center",
   },
-  avatarTouchable: {
+  richScreenTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#78070D",
+    letterSpacing: -0.5,
+    lineHeight: 28,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        textAlignVertical: "center",
+      },
+    }),
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: "#6E6862",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  headerActionsWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerAvatarBtn: {
     position: "relative",
+    padding: 2,
   },
   avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#ffffff",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: "rgba(225, 29, 72, 0.18)",
+    borderColor: "rgba(120, 7, 13, 0.22)",
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
       ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 2 },
+        shadowColor: "#231E1C",
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowRadius: 2,
       },
       default: {
-        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+        elevation: 1,
       },
     }),
   },
   avatarText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
-    color: "#cf0046",
+    color: "#78070D",
   },
   statusDot: {
     position: "absolute",
-    bottom: -1,
-    right: -1,
-    width: 11,
-    height: 11,
-    borderRadius: 5.5,
-    borderWidth: 2,
-    borderColor: "#ffffff",
+    bottom: 1,
+    right: 1,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "#10b981",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  headerPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  leftBrandContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
+  leftIconWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  titleColumn: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
 });

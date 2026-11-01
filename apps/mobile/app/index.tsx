@@ -1,18 +1,22 @@
 import { useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Layers } from "lucide-react-native";
 import { getAuthToken, mobileApiClient, clearAuthTokens } from "../lib/api-client";
+import { StudioLoader } from "../components/brand/StudioLoader";
 
 export default function RootEntryScreen() {
   const router = useRouter();
 
   useEffect(() => {
     async function determineInitialRoute() {
+      // Ensure the elegant launch branding is visible for at least 1.4s
+      const minLaunchDelay = new Promise((resolve) => setTimeout(resolve, 1400));
+
       try {
         const token = await getAuthToken();
         if (!token) {
+          await minLaunchDelay;
           router.replace("/(auth)/login");
           return;
         }
@@ -27,23 +31,26 @@ export default function RootEntryScreen() {
             timeoutPromise,
           ]) as { isAuthenticated: boolean };
 
+          await minLaunchDelay;
           if (check.isAuthenticated) {
-            router.replace("/(tabs)/expense");
+            router.replace("/(tabs)");
           } else {
             await clearAuthTokens();
             router.replace("/(auth)/login");
           }
         } catch (err: unknown) {
+          await minLaunchDelay;
           const msg = err instanceof Error ? err.message : "";
           if (msg.includes("superseded") || msg.includes("terminated")) {
             await clearAuthTokens();
             router.replace("/(auth)/login");
           } else {
             // Network offline or timeout: allow offline load to tabs
-            router.replace("/(tabs)/expense");
+            router.replace("/(tabs)");
           }
         }
       } catch {
+        await minLaunchDelay;
         router.replace("/(auth)/login");
       }
     }
@@ -52,18 +59,12 @@ export default function RootEntryScreen() {
   }, [router]);
 
   return (
-    <View className="flex-1 bg-slate-50 items-center justify-center p-6">
+    <View style={{ flex: 1, backgroundColor: "#FAF7F2" }}>
       <StatusBar style="dark" />
-      <View className="w-14 h-14 rounded-2xl bg-white border border-rose-200/80 items-center justify-center mb-4 shadow-xs">
-        <Layers size={28} color="#e11d48" strokeWidth={2} />
-      </View>
-      <Text className="text-lg font-bold text-slate-900 text-center tracking-tight">
-        Navarachna Studio
-      </Text>
-      <Text className="text-[11px] text-rose-600 font-semibold tracking-wider uppercase mt-1 mb-5 text-center">
-        Haute Couture Atelier
-      </Text>
-      <ActivityIndicator size="small" color="#e11d48" />
+      <StudioLoader
+        statusText="Verifying Active Session..."
+        size={104}
+      />
     </View>
   );
 }

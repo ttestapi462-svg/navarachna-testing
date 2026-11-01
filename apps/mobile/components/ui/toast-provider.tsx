@@ -8,11 +8,11 @@ import type { MobileNotification, MobileNotificationKind } from "../../lib/notif
 const ToastContext = createContext<{ showToast: typeof notifyMobile } | null>(null);
 
 const palette: Record<MobileNotificationKind, { bg: string; border: string; icon: string; title: string }> = {
-  success: { bg: "#ecfdf5", border: "rgba(33, 182, 75, 0.3)", icon: "#21b64b", title: "#0f172a" },
-  error: { bg: "#fff1f2", border: "rgba(239, 68, 68, 0.3)", icon: "#ef4444", title: "#0f172a" },
-  warning: { bg: "#fffbeb", border: "#fcd34d", icon: "#d97706", title: "#0f172a" },
-  validation: { bg: "#fffbeb", border: "#fcd34d", icon: "#d97706", title: "#0f172a" },
-  info: { bg: "#eff6ff", border: "#93c5fd", icon: "#2563eb", title: "#0f172a" },
+  success: { bg: "#ecfdf5", border: "rgba(33, 182, 75, 0.3)", icon: "#21b64b", title: "#231E1C" },
+  error: { bg: "#fff1f2", border: "rgba(239, 68, 68, 0.3)", icon: "#ef4444", title: "#231E1C" },
+  warning: { bg: "#fffbeb", border: "#fcd34d", icon: "#d97706", title: "#231E1C" },
+  validation: { bg: "#fffbeb", border: "#fcd34d", icon: "#d97706", title: "#231E1C" },
+  info: { bg: "#eff6ff", border: "#93c5fd", icon: "#2563eb", title: "#231E1C" },
 };
 
 const icons = { success: CheckCircle2, error: AlertCircle, warning: AlertTriangle, validation: AlertTriangle, info: Info };
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     ...Platform.select({
-      ios: { shadowColor: "#0f172a", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 14 },
+      ios: { shadowColor: "#231E1C", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 14 },
       android: { elevation: 12 },
       default: { boxShadow: "0 10px 24px rgba(15, 23, 42, 0.16)" },
     }),

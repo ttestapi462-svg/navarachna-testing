@@ -68,12 +68,12 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
   },
   destructive: {
-    backgroundColor: "#fff1f2",
-    borderColor: "#fecdd3",
+    backgroundColor: "rgba(120, 7, 13, 0.08)",
+    borderColor: "rgba(185, 28, 28, 0.2)",
   },
   primary: {
-    backgroundColor: "#fff1f2",
-    borderColor: "#ffe4e6",
+    backgroundColor: "rgba(120, 7, 13, 0.08)",
+    borderColor: "rgba(120, 7, 13, 0.18)",
   },
   success: {
     backgroundColor: "#ecfdf5",
@@ -92,10 +92,10 @@ const textStyles = StyleSheet.create({
     color: "#0f172a",
   },
   destructive: {
-    color: "#be123c",
+    color: "#b91c1c",
   },
   primary: {
-    color: "#cf0046",
+    color: "#78070D",
   },
   success: {
     color: "#047857",
