@@ -800,13 +800,6 @@ export default function ExpensesPage() {
     setSearch(searchInput.trim());
   };
 
-  // Tapping mobile card body opens bill preview if bill exists
-  const handleCardTap = async (expense: Expense) => {
-    if (!expense.billFileName) return;
-    setActiveExpense(expense);
-    setMobileBillPreviewOpen(true);
-    await viewBill(expense);
-  };
 
   // Pull-to-refresh touch handlers on list container
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -1231,7 +1224,7 @@ export default function ExpensesPage() {
                           {formatDate(expense.expenseDate)}
                         </span>
                       </div>
-                      <span className="shrink-0 text-right text-xl font-extrabold leading-tight tracking-tight tabular-nums" style={{ color: "#dc143c" }}>
+                      <span className="shrink-0 text-right text-xl font-extrabold leading-tight tracking-tight tabular-nums text-primary">
                         {formatCurrency(expense.amount)}
                       </span>
                     </div>

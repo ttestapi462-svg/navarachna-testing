@@ -81,10 +81,10 @@ export function EmployeeRemoveLoginDialog({
         </div>
 
         {/* Full-width Divider & Footer */}
-        <AlertDialogFooter className="border-t border-slate-200/90 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
+        <AlertDialogFooter className="border-t border-border bg-muted/40 dark:bg-zinc-900/60 px-4 py-2.5 flex flex-row items-center justify-end gap-2">
           <AlertDialogCancel
             disabled={removeLoginMutation.isPending}
-            className="h-8 px-3 rounded-full text-xs font-medium border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors shadow-2xs"
+            className="h-8 px-3 rounded-full text-xs font-medium border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors shadow-2xs"
           >
             Cancel
           </AlertDialogCancel>

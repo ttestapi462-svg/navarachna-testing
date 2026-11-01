@@ -14,37 +14,45 @@ export interface StudioAnimatedLogoProps {
    */
   className?: string;
   /**
-   * Animation cycle duration in seconds. Defaults to 3.6s.
+   * Animation cycle duration in seconds. Defaults to 3.4s.
    */
   duration?: number;
   /**
-   * When true (default), uses a tightly cropped square viewBox (160 70 880 810)
-   * which eliminates horizontal dead space so the emblem scales boldly.
-   * When false, uses the native canvas (0 0 1200 896).
+   * When true (default), uses a tightly cropped square viewBox (140 190 620 620)
+   * which eliminates canvas dead space so the emblem scales boldly.
+   * When false, uses the native canvas (0 0 1024 1024).
    */
   tightFit?: boolean;
 }
 
 /**
  * Authentic Navarachna Designer Studio animated monogram SVG:
- * - Handcrafted sewing needle tilted diagonally at -15.28 degrees
- * - Multi-stop crimson-to-navy gradient silk thread weaving through the needle eye
- * - Fluid embroidery stitching draw-in animation with smooth looping
+ * - Handcrafted 3D metallic gold foil needle tilted at -15.16 degrees with true hollow eye
+ * - Antique gold foil silk thread weaving continuously through the hollow eye at (524.3, 293.6)
+ * - Fluid embroidery stitching draw-in animation with smooth 3.4s loop
  * - Pure transparent background without any bounding boxes
  */
 export function StudioAnimatedLogo({
   size = 96,
   className,
-  duration = 3.6,
+  duration = 3.4,
   tightFit = true,
 }: StudioAnimatedLogoProps) {
-  // Unique gradient IDs to prevent collisions if multiple instances are mounted
-  const id = React.useId().replace(/:/g, "_");
-  const threadGradId = `threadGrad_${id}`;
-  const needleGradId = `needleGrad_${id}`;
+  // Unique gradient and element IDs to prevent collisions if multiple instances are mounted
+  const rawId = React.useId();
+  const id = React.useMemo(() => rawId.replace(/[^a-zA-Z0-9_-]/g, "_"), [rawId]);
+
+  const goldFoilId = `nav_gold_foil_${id}`;
+  const goldBevelId = `nav_gold_bevel_${id}`;
+  const goldCrestId = `nav_gold_crest_${id}`;
+  const needleFoilId = `nav_needle_foil_${id}`;
+  const eyeGlintGradId = `nav_eye_glint_${id}`;
+  const foilShadowId = `nav_foil_shadow_${id}`;
+  const needleClipId = `nav_needle_clip_${id}`;
+  const needleShapeId = `nav_needle_shape_${id}`;
 
   const durStr = `${duration}s`;
-  const viewBox = tightFit ? "160 70 880 810" : "0 0 1200 896";
+  const viewBox = tightFit ? "140 190 620 620" : "0 0 1024 1024";
 
   return (
     <svg
@@ -57,82 +65,228 @@ export function StudioAnimatedLogo({
       role="img"
       aria-label="Navarachna Designer Studio Animated Emblem"
     >
+      <style>{`
+        .nav-thread-edge_${id},
+        .nav-thread-core_${id},
+        .nav-thread-highlight_${id} {
+          stroke-dasharray: 1000 1200;
+          stroke-dashoffset: 1025;
+          animation: nav-thread-draw_${id} ${durStr} cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+        }
+
+        .nav-needle-assembly_${id} {
+          transform-origin: 524.3px 293.6px;
+          animation: nav-needle-response_${id} ${durStr} ease-in-out infinite;
+        }
+
+        .nav-eye-glint_${id} {
+          transform-origin: 524.3px 293.6px;
+          animation: nav-eye-spark_${id} ${durStr} ease-out infinite;
+        }
+
+        @keyframes nav-thread-draw_${id} {
+          0% {
+            stroke-dashoffset: 1025;
+            opacity: 0;
+          }
+          4% {
+            stroke-dashoffset: 1020;
+            opacity: 1;
+          }
+          46% {
+            stroke-dashoffset: 425;
+            opacity: 1;
+          }
+          76% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+            filter: brightness(1);
+          }
+          85% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+            filter: brightness(1.12);
+          }
+          92% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+            filter: brightness(1);
+          }
+          98% {
+            stroke-dashoffset: 0;
+            opacity: 0;
+          }
+          100% {
+            stroke-dashoffset: 1025;
+            opacity: 0;
+          }
+        }
+
+        @keyframes nav-needle-response_${id} {
+          0%, 40% {
+            transform: translate(0px, 0px) rotate(0deg);
+            filter: brightness(1);
+          }
+          46% {
+            transform: translate(0.9px, -0.6px) rotate(0.35deg);
+            filter: brightness(1.08);
+          }
+          54%, 76% {
+            transform: translate(0px, 0px) rotate(0deg);
+            filter: brightness(1);
+          }
+          85% {
+            filter: brightness(1.1);
+          }
+          93%, 100% {
+            transform: translate(0px, 0px) rotate(0deg);
+            filter: brightness(1);
+          }
+        }
+
+        @keyframes nav-eye-spark_${id} {
+          0%, 41% {
+            opacity: 0;
+            transform: scale(0.45);
+          }
+          46% {
+            opacity: 0.9;
+            transform: scale(1.15);
+          }
+          53%, 100% {
+            opacity: 0;
+            transform: scale(0.5);
+          }
+        }
+      `}</style>
+
       <defs>
-        <linearGradient
-          id={threadGradId}
-          x1="212"
-          y1="420"
-          x2="988"
-          y2="420"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0%" stopColor="#BA1D39" />
-          <stop offset="28%" stopColor="#8B223E" />
-          <stop offset="52%" stopColor="#4A2148" />
-          <stop offset="72%" stopColor="#242756" />
-          <stop offset="100%" stopColor="#14163A" />
+        {/* Authentic Metallic Gold Foil Gradient */}
+        <linearGradient id={goldFoilId} x1="14%" y1="12%" x2="86%" y2="88%">
+          <stop offset="0%" stopColor="#F0CF6E" />
+          <stop offset="25%" stopColor="#D4A83A" />
+          <stop offset="50%" stopColor="#FFF2B2" />
+          <stop offset="75%" stopColor="#D4A83A" />
+          <stop offset="100%" stopColor="#A67C1E" />
         </linearGradient>
 
-        <linearGradient
-          id={needleGradId}
-          x1="0"
-          y1="0"
-          x2="0"
-          y2="768"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0%" stopColor="#3C1E42" />
-          <stop offset="25%" stopColor="#261F46" />
-          <stop offset="100%" stopColor="#101334" />
+        {/* Deep Antique Gold Bevel / Rim Gradient */}
+        <linearGradient id={goldBevelId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#C2942E" />
+          <stop offset="50%" stopColor="#A67C1E" />
+          <stop offset="100%" stopColor="#845F12" />
         </linearGradient>
+
+        {/* Fine Specular Gold Foil Crest Highlight */}
+        <linearGradient id={goldCrestId} x1="18%" y1="10%" x2="82%" y2="90%">
+          <stop offset="0%" stopColor="#FFF5C0" stopOpacity="0.88" />
+          <stop offset="50%" stopColor="#F0CF6E" stopOpacity="0.68" />
+          <stop offset="100%" stopColor="#FFF5C0" stopOpacity="0.85" />
+        </linearGradient>
+
+        {/* Needle Metallic Shaft Sheen */}
+        <linearGradient id={needleFoilId} x1="0%" y1="0%" x2="100%" y2="15%">
+          <stop offset="0%" stopColor="#A67C1E" />
+          <stop offset="28%" stopColor="#D4A83A" />
+          <stop offset="52%" stopColor="#F0CF6E" />
+          <stop offset="75%" stopColor="#D4A83A" />
+          <stop offset="100%" stopColor="#A67C1E" />
+        </linearGradient>
+
+        {/* Radial Golden Glint at Needle Eye */}
+        <radialGradient id={eyeGlintGradId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFF7CC" stopOpacity="0.95" />
+          <stop offset="45%" stopColor="#F0CF6E" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#D4A83A" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Clean Soft Drop Shadow Suitable for Transparent Backgrounds */}
+        <filter id={foilShadowId} x="-12%" y="-12%" width="124%" height="124%">
+          <feDropShadow dx="0" dy="2.5" stdDeviation="2.8" floodColor="#2A1B05" floodOpacity="0.28" />
+        </filter>
+
+        {/* Foreground Occlusion ClipPath (in Needle Local Space) */}
+        <clipPath id={needleClipId}>
+          <rect x="-24" y="10" width="24" height="126" />
+          <rect x="-24" y="180" width="48" height="400" />
+        </clipPath>
+
+        {/* True Hollow-Eyed Needle Geometry */}
+        <g id={needleShapeId}>
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M 0,0 C 7.8,0 13,22 13,71 C 13,115 9.8,142 8.6,185 C 6.2,275 3.2,430 0,570 C -3.2,430 -6.2,275 -8.6,185 C -9.8,142 -13,115 -13,71 C -13,22 -7.8,0 0,0 Z M 0,14 C 3.4,14 5.2,34 5.2,71 C 5.2,106 3.4,132 0,132 C -3.4,132 -5.2,106 -5.2,71 C -5.2,34 -3.4,14 0,14 Z"
+            fill={`url(#${needleFoilId})`}
+            stroke={`url(#${goldBevelId})`}
+            strokeWidth="1.3"
+          />
+          {/* Foil Bevel Highlights on Needle */}
+          <path d="M -8.6,22 C -9.6,46 -9.6,96 -8.4,126" stroke="#FFF2B2" strokeWidth="1.5" strokeLinecap="round" opacity="0.78" />
+          <path d="M 8.6,22 C 9.6,46 9.6,96 8.4,126" stroke="#FFF2B2" strokeWidth="1.2" strokeLinecap="round" opacity="0.52" />
+          <path d="M -1.8,142 L 0,545" stroke="#FFF2B2" strokeWidth="1.9" strokeLinecap="round" opacity="0.72" />
+        </g>
       </defs>
 
-      {/* Needle Back Layer */}
-      <g transform="translate(684.5, 109.0) rotate(-15.28)">
-        <path
-          fill={`url(#${needleGradId})`}
-          fillRule="evenodd"
-          d="M 0,0 C 11.5,0 18.8,11.0 19.5,28.0 C 20.2,55.0 20.2,95.0 19.2,135.0 C 17.8,195.0 14.2,310.0 9.5,510.0 C 6.2,645.0 2.8,735.0 0.0,768.2 C -2.8,735.0 -6.2,645.0 -9.5,510.0 C -14.2,310.0 -17.8,195.0 -19.2,135.0 C -20.2,95.0 -20.2,55.0 -19.5,28.0 C -18.8,11.0 -11.5,0 0,0 Z M 0,24.0 C -4.8,24.0 -7.6,46.0 -7.6,84.0 C -7.6,120.0 -4.5,146.0 0.0,154.0 C 4.5,146.0 7.6,120.0 7.6,84.0 C 7.6,46.0 4.8,24.0 0,24.0 Z"
-        />
-      </g>
+      {/* Master Foil Shadow Group */}
+      <g filter={`url(#${foilShadowId})`}>
+        {/* LAYER 1 (BOTTOM): Full Needle with Hollow Eye */}
+        <g className={`nav-needle-assembly_${id}`}>
+          <g transform="translate(505.7, 225) rotate(-15.16)">
+            <use href={`#${needleShapeId}`} />
+          </g>
+        </g>
 
-      {/* Animated Monogram Thread */}
-      <path
-        fill="none"
-        stroke={`url(#${threadGradId})`}
-        strokeWidth={17.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        pathLength="2520"
-        strokeDasharray="2520"
-        strokeDashoffset="2520"
-        d="M 221.5 214.6 C 258.5 193.6, 305.6 172.8, 352.2 168.9 C 398.7 164.9, 444.2 181.2, 481.8 209.5 C 519.4 237.8, 547.8 276.1, 568.0 318.2 C 588.2 360.3, 602.3 406.2, 606.8 452.3 C 611.3 498.5, 604.7 547.9, 580.1 587.5 C 555.6 627.2, 509.0 652.8, 461.7 649.6 C 414.5 646.4, 377.9 604.0, 369.5 559.6 C 361.1 515.2, 374.5 466.4, 393.0 422.8 C 411.5 379.1, 436.8 340.0, 469.8 307.8 C 502.9 275.5, 543.7 250.0, 587.3 232.7 C 630.9 215.3, 676.8 205.8, 709.5 206.3 C 758.0 207.0, 816.6 218.0, 858.1 240.0 C 899.7 261.9, 933.9 295.7, 954.9 336.9 C 975.9 378.1, 984.1 426.4, 977.6 473.1 C 971.1 519.8, 949.9 564.7, 916.4 596.8 C 882.8 629.0, 837.6 647.7, 790.5 642.7 C 743.3 637.7, 691.9 611.0, 679.9 567.9 C 667.9 524.7, 702.5 474.7, 743.6 456.9"
-      >
-        <animate
-          attributeName="stroke-dashoffset"
-          values="2520; 0; 0; 2520"
-          keyTimes="0; 0.62; 0.98; 1"
-          keySplines="0.35 0.0 0.20 1.0; 0 0 1 1; 0 0 1 1"
-          calcMode="spline"
-          dur={durStr}
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="opacity"
-          values="0; 1; 1; 0; 0"
-          keyTimes="0; 0.05; 0.86; 0.97; 1"
-          keySplines="0.4 0 0.2 1; 0 0 1 1; 0.4 0 0.6 1; 0 0 1 1"
-          calcMode="spline"
-          dur={durStr}
-          repeatCount="indefinite"
-        />
-      </path>
+        {/* LAYER 2 (MIDDLE): G1-Continuous Gold Foil Thread Path */}
+        <g>
+          {/* Antique Gold Bevel Base */}
+          <path
+            className={`nav-thread-edge_${id}`}
+            pathLength={1000}
+            d="M 184,300 C 245,248 340,256 401,331 C 446,386 462,465 450,532 C 436,596 392,626 352,620 C 296,612 274,542 292,464 C 308,395 352,356 401,331 C 450,306 488,293.6 524.3,293.6 C 590,293.6 718,342 718,468 C 718,566 648,622 575,621 C 512,620 486,562 508,512 C 518,490 535,480 552,476"
+            stroke={`url(#${goldBevelId})`}
+            strokeWidth={15.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
 
-      {/* Needle Front Lip (renders needle eye in 3D around the thread) */}
-      <g transform="translate(684.5, 109.0) rotate(-15.28)">
-        <path
-          fill={`url(#${needleGradId})`}
-          d="M 4.8,24.0 C 7.6,46.0 7.6,84.0 7.6,84.0 C 7.6,120.0 4.5,146.0 0.0,154.0 L 19.0,154.0 C 19.8,115.0 20.2,75.0 19.5,28.0 L 4.8,24.0 Z"
+          {/* Primary Metallic Gold Foil Body */}
+          <path
+            className={`nav-thread-core_${id}`}
+            pathLength={1000}
+            d="M 184,300 C 245,248 340,256 401,331 C 446,386 462,465 450,532 C 436,596 392,626 352,620 C 296,612 274,542 292,464 C 308,395 352,356 401,331 C 450,306 488,293.6 524.3,293.6 C 590,293.6 718,342 718,468 C 718,566 648,622 575,621 C 512,620 486,562 508,512 C 518,490 535,480 552,476"
+            stroke={`url(#${goldFoilId})`}
+            strokeWidth={13}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Specular Foil Bevel Highlight Filament */}
+          <path
+            className={`nav-thread-highlight_${id}`}
+            pathLength={1000}
+            d="M 184,300 C 245,248 340,256 401,331 C 446,386 462,465 450,532 C 436,596 392,626 352,620 C 296,612 274,542 292,464 C 308,395 352,356 401,331 C 450,306 488,293.6 524.3,293.6 C 590,293.6 718,342 718,468 C 718,566 648,622 575,621 C 512,620 486,562 508,512 C 518,490 535,480 552,476"
+            stroke={`url(#${goldCrestId})`}
+            strokeWidth={3.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </g>
+
+        {/* LAYER 3 (TOP FOREGROUND OCCLUSION): Left Eye Wall + Lower Needle Shaft */}
+        <g className={`nav-needle-assembly_${id}`}>
+          <g transform="translate(505.7, 225) rotate(-15.16)" clipPath={`url(#${needleClipId})`}>
+            <use href={`#${needleShapeId}`} />
+          </g>
+        </g>
+
+        {/* Subtle Golden Eye-Threading Glint at (524.3, 293.6) */}
+        <circle
+          className={`nav-eye-glint_${id}`}
+          cx={524.3}
+          cy={293.6}
+          r={16}
+          fill={`url(#${eyeGlintGradId})`}
         />
       </g>
     </svg>
@@ -149,7 +303,7 @@ export interface StudioLoaderProps {
   variant?: "screen" | "inline" | "logoOnly";
   /**
    * Size of the animated SVG logo in pixels.
-   * Defaults to 104 for screen, 28 for inline, 48 for logoOnly.
+   * Defaults to 120 for screen, 32 for inline, 48 for logoOnly.
    */
   size?: number;
   /**
@@ -157,7 +311,7 @@ export interface StudioLoaderProps {
    */
   title?: string;
   /**
-   * Optional status text. Defaults to undefined (clean, no extra text).
+   * Optional status text (e.g. "Verifying Active Session..."). Defaults to undefined.
    */
   statusText?: string;
   /**
@@ -173,16 +327,17 @@ export interface StudioLoaderProps {
    */
   statusClassName?: string;
   /**
-   * Duration of the embroidery animation loop in seconds (default 3.6s).
+   * Duration of the embroidery animation loop in seconds (default 3.4s).
    */
   duration?: number;
 }
 
 /**
- * Neat & Clean Atelier Studio Loader:
- * - Direct, floating animated SVG monogram with no background container
- * - Pure brand identity: needle & silk thread embroidery animation
- * - No redundant spinner or extra loader
+ * Authentic Navarachna Atelier Studio Loader:
+ * - Direct, floating animated SVG monogram with pure transparent background
+ * - 3D Antique Gold Foil needle and silk thread embroidery animation
+ * - Authentic brand typography following official Comfortaa & Marcellus logo font styling
+ * - Clean, elegant presentation with zero redundant spinners
  */
 export function StudioLoader({
   variant = "screen",
@@ -192,7 +347,7 @@ export function StudioLoader({
   showTitle = true,
   className,
   statusClassName,
-  duration = 3.6,
+  duration = 3.4,
 }: StudioLoaderProps) {
   if (variant === "logoOnly") {
     return (
@@ -205,7 +360,7 @@ export function StudioLoader({
   }
 
   if (variant === "inline") {
-    const inlineSize = size ?? 28;
+    const inlineSize = size ?? 32;
     return (
       <div
         className={cn(
@@ -215,14 +370,25 @@ export function StudioLoader({
       >
         <StudioAnimatedLogo size={inlineSize} duration={duration} />
         {showTitle && (
-          <span className="text-xs font-semibold leading-tight tracking-wide">
-            {title}
-          </span>
+          title === "Navarachna Designer Studio" ? (
+            <img
+              src="/assets/navarachna-wordmark-gold.png"
+              alt="Navarachna Designer Studio"
+              style={{ height: 22, width: "auto" }}
+              className="h-5.5 w-auto object-contain select-none"
+              loading="eager"
+              decoding="async"
+            />
+          ) : (
+            <span className="font-brand font-semibold text-xs studio-gold-text select-none">
+              {title}
+            </span>
+          )
         )}
         {statusText && (
           <span
             className={cn(
-              "text-[11px] text-muted-foreground font-normal leading-tight",
+              "font-subtitle text-[11px] text-[#8E6339] dark:text-[#E0B159] tracking-wider",
               statusClassName
             )}
           >
@@ -234,7 +400,7 @@ export function StudioLoader({
   }
 
   // variant === "screen"
-  const logoSize = size ?? 104;
+  const logoSize = size ?? 120;
 
   return (
     <div
@@ -244,23 +410,47 @@ export function StudioLoader({
       )}
     >
       <div className="flex flex-col items-center justify-center text-center">
-        {/* Pure animated SVG with no background box or border */}
+        {/* Pure animated SVG with transparent background */}
         <div className="flex items-center justify-center mb-3">
           <StudioAnimatedLogo size={logoSize} duration={duration} />
         </div>
 
-        {/* Clean, elegant brand typography */}
+        {/* Authentic Brand Wordmark following official logo font styling */}
         {showTitle && (
-          <p className="text-sm font-semibold text-foreground tracking-wide select-none">
-            {title}
-          </p>
+          <div className="flex flex-col items-center justify-center select-none mt-1">
+            {title === "Navarachna Designer Studio" ? (
+              <img
+                src="/assets/navarachna-wordmark-gold.png"
+                alt="Navarachna Designer Studio"
+                style={{ height: 40, width: "auto" }}
+                className="h-10 w-auto max-w-[270px] sm:max-w-[300px] object-contain select-none drop-shadow-[0_2px_8px_rgba(74,13,27,0.12)]"
+                loading="eager"
+                decoding="async"
+              />
+            ) : (
+              <div className="flex flex-col items-center select-none">
+                <span className="font-brand font-semibold text-lg sm:text-xl tracking-tight studio-gold-text select-none">
+                  {title}
+                </span>
+                <div className="flex items-center gap-2 mt-1 select-none">
+                  <span className="h-px w-6 sm:w-8 bg-gradient-to-r from-transparent via-[#C59B4E]/60 to-[#C59B4E]" />
+                  <span className="text-[9px] sm:text-[10px] text-[#C59B4E]">✦</span>
+                  <span className="font-subtitle studio-subtitle-text text-[10px] sm:text-[11px] uppercase tracking-[0.22em] select-none">
+                    Designer Studio
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] text-[#C59B4E]">✦</span>
+                  <span className="h-px w-6 sm:w-8 bg-gradient-to-l from-transparent via-[#C59B4E]/60 to-[#C59B4E]" />
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* Optional subtle status (no extra spinner) */}
+        {/* Subtle, elegant status text matching brand typography & gold tone */}
         {statusText && (
           <p
             className={cn(
-              "text-xs text-muted-foreground mt-1.5 font-normal tracking-wide select-none",
+              "font-subtitle text-xs text-[#8E6339] dark:text-[#E0B159] mt-3 font-medium tracking-widest select-none animate-pulse",
               statusClassName
             )}
           >

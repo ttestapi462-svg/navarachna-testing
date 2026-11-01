@@ -30,7 +30,7 @@ export function DashboardHeader() {
   const HeaderIcon = headerConfig.icon;
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-3.5 sm:px-5 backdrop-blur-md select-none">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background px-3.5 sm:px-5 select-none">
       {/* Mobile/Tablet Drawer Trigger & Dynamic Page Title */}
       <div className="flex items-center gap-2.5">
         {isMobile && (

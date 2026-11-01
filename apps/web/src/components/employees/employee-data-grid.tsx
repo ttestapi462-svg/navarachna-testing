@@ -66,7 +66,7 @@ interface EmployeeDataGridProps {
 
 // Deterministic pastel avatar background & text colors matching reference
 const avatarColorPalettes = [
-  "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+  "bg-primary/15 text-primary dark:bg-primary/30 dark:text-primary-foreground",
   "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
   "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
   "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
@@ -506,33 +506,33 @@ function EmployeeDataGridComponent({
     <div className="w-full flex-1 flex flex-col min-h-0 h-full gap-2.5 sm:gap-3 pb-1">
       {/* ─── 4 Responsive KPI Summary Cards (Compact, Colorful Executive UI) ─── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 shrink-0">
-        {/* Card 1: Total Employees (Rose/Crimson Theme) */}
-        <div className="group relative overflow-hidden rounded-xl border border-rose-200/80 dark:border-rose-900/50 bg-gradient-to-br from-rose-50/90 via-rose-50/40 to-pink-100/60 dark:from-rose-950/40 dark:via-rose-950/20 dark:to-pink-900/30 p-2.5 sm:px-3 shadow-2xs hover:shadow-xs hover:border-rose-400/80 hover:-translate-y-0.5 transition-all duration-200">
+        {/* Card 1: Total Employees (Atelier Wine & Gold Theme) */}
+        <div className="group relative overflow-hidden rounded-xl border border-primary/25 dark:border-primary/40 bg-gradient-to-br from-primary/10 via-background to-accent/20 dark:from-primary/20 dark:via-background dark:to-accent/10 p-2.5 sm:px-3 shadow-2xs hover:shadow-xs hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 truncate">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary dark:text-primary-foreground truncate">
               Total Employees
             </span>
-            <div className="flex size-6 items-center justify-center rounded-md bg-rose-500 text-white shadow-2xs shrink-0">
+            <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-2xs shrink-0">
               <Users className="size-3" />
             </div>
           </div>
           <div className="mt-1 flex items-baseline justify-between gap-1.5">
-            <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-rose-950 dark:text-rose-50 leading-none">
+            <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-primary dark:text-primary-foreground leading-none">
               {statsLoading ? (
-                <Skeleton className="h-6 w-10 rounded-md bg-rose-200/50" />
+                <Skeleton className="h-6 w-10 rounded-md bg-primary/20" />
               ) : (
                 totalEmployeesCount
               )}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-rose-100/90 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 border border-rose-200/80 dark:border-rose-800">
+            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground border border-primary/20 dark:border-primary/40">
               <CheckCircle2 className="size-2.5" />
               <span>Active</span>
             </span>
           </div>
-          <p className="mt-0.5 text-[10px] font-medium text-rose-600/80 dark:text-rose-300/80 truncate leading-tight">
+          <p className="mt-0.5 text-[10px] font-medium text-primary/80 dark:text-primary-foreground/80 truncate leading-tight">
             Registered Atelier Staff
           </p>
-          <Users className="absolute -bottom-2 -right-2 size-12 text-rose-500/10 pointer-events-none group-hover:text-rose-500/15 transition-colors" />
+          <Users className="absolute -bottom-2 -right-2 size-12 text-primary/10 pointer-events-none group-hover:text-primary/15 transition-colors" />
         </div>
 
         {/* Card 2: Primary Studio Department (Blue Theme) */}

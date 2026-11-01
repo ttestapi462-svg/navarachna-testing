@@ -8,8 +8,37 @@
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
   --font-brand: var(--font-brand);
-  --color-brand-crimson: #9E1B38;
-  --color-brand-navy: #1E2246;
+  --font-subtitle: var(--font-subtitle);
+
+  /* ─── Atelier Single Source of Truth Brand Colors ─── */
+  --color-brand-maroon: #78070D;
+  --color-brand-maroon-hover: #63060B;
+  --color-brand-maroon-active: #4A0408;
+  --color-brand-maroon-light: rgba(120, 7, 13, 0.08);
+  --color-brand-maroon-subtle: rgba(120, 7, 13, 0.04);
+
+  --color-brand-wine-noir: #1F0207;
+  --color-brand-wine-deep: #2D050F;
+
+  --color-brand-gold-highlight: #E0B159;
+  --color-brand-gold: #C59B4E;
+  --color-brand-gold-hover: #B58838;
+  --color-brand-gold-active: #8E6339;
+  --color-brand-gold-light: rgba(197, 155, 78, 0.15);
+  --color-brand-gold-subtle: rgba(197, 155, 78, 0.06);
+
+  --color-brand-ivory: #FAF7F2;
+  --color-brand-cream: #F5EFE6;
+  --color-brand-stone: #6E6862;
+  --color-brand-stone-light: #9B958F;
+  --color-brand-charcoal: #231E1C;
+  --color-brand-border: #E8E2D8;
+
+  /* Legacy aliases mapped to single source of truth */
+  --color-brand-crimson: #78070D;
+  --color-brand-navy: #231E1C;
+
+  /* ─── Semantic Tokens mapped to Brand Tokens ─── */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -60,98 +89,146 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.148 0.004 228.8);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.465 0.170 15.3);
-  --primary-foreground: oklch(0.985 0.005 15.0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.963 0.002 197.1);
-  --muted-foreground: oklch(0.56 0.021 213.5);
-  --accent: oklch(0.963 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.005 214.3);
-  --input: oklch(0.925 0.005 214.3);
-  --ring: oklch(0.465 0.170 15.3 / 30%);
-  --chart-1: #9E1B38;
-  --chart-2: #1E2246;
-  --chart-3: #552240;
-  --chart-4: #D91E4A;
-  --chart-5: #3D498C;
+  /* ═══════════════════════════════════════════════════════════════
+     ATELIER OFFICIAL THEME (SINGLE PLACE PALETTE DEFINITION)
+     Primary Brand Color: #78070D (Atelier Crimson Garnet)
+     - Primary: Atelier Crimson Garnet (#78070D)
+     - Accent & Focus: Antique Brushed Gold (#C59B4E) / Highlight (#E0B159)
+     - Canvas Background: Warm Linen Ivory (#FAF7F2)
+     - Muted Foreground: Warm Stone Taupe (#6E6862)
+     - Surfaces: Pure Crisp White (#FFFFFF)
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* Canvas & Text */
+  --background: #FAF7F2;
+  --foreground: #231E1C;
+
+  /* Cards & Popovers */
+  --card: #FFFFFF;
+  --card-foreground: #231E1C;
+  --popover: #FFFFFF;
+  --popover-foreground: #231E1C;
+
+  /* Primary - Atelier Crimson Garnet (#78070D) */
+  --primary: #78070D;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary - Soft Warm Oatmeal / Linen */
+  --secondary: #F3EFE8;
+  --secondary-foreground: #78070D;
+
+  /* Muted - Soft Warm Tint & Stone Taupe */
+  --muted: #F1ECE3;
+  --muted-foreground: #6E6862;
+
+  /* Accent - Antique Champagne Gold Tint & Accent */
+  --accent: #FAF2E2;
+  --accent-foreground: #78070D;
+
+  /* Destructive */
+  --destructive: #B91C1C;
+  --destructive-foreground: #FFFFFF;
+
+  /* Borders, Inputs, Focus Rings */
+  --border: #E8E2D8;
+  --input: #E2DDD5;
+  --ring: #C59B4E;
+
+  /* Charts - Calibrated Palette */
+  --chart-1: #78070D;
+  --chart-2: #C59B4E;
+  --chart-3: #A3131B;
+  --chart-4: #D49A3D;
+  --chart-5: #4A0408;
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.465 0.170 15.3);
-  --sidebar-primary-foreground: oklch(0.969 0.015 12.422);
-  --sidebar-accent: oklch(0.963 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.925 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
-  --scrollbar-thumb: oklch(0.72 0.015 214 / 40%);
-  --scrollbar-thumb-hover: oklch(0.514 0.222 16.935 / 70%);
-  --scrollbar-thumb-active: oklch(0.514 0.222 16.935 / 90%);
+
+  /* Sidebar - Seamlessly integrated with Ivory canvas */
+  --sidebar: #FAF7F2;
+  --sidebar-foreground: #231E1C;
+  --sidebar-primary: #78070D;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(120, 7, 13, 0.06);
+  --sidebar-accent-foreground: #78070D;
+  --sidebar-border: #E8E2D8;
+  --sidebar-ring: #C59B4E;
+
+  /* Scrollbars */
+  --scrollbar-thumb: rgba(120, 7, 13, 0.22);
+  --scrollbar-thumb-hover: #78070D;
+  --scrollbar-thumb-active: #4A0408;
   --scrollbar-track: transparent;
-  --destructive-foreground: var(--color-red-800);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-900);
-  --info: var(--color-violet-500);
-  --info-foreground: var(--color-violet-900);
-  --warning: var(--color-yellow-500);
-  --warning-foreground: var(--color-yellow-900);
-  --invert: var(--color-zinc-900);
-  --invert-foreground: var(--color-zinc-50);
+
+  /* Status Tokens */
+  --destructive-foreground: #B91C1C;
+  --success: #15803D;
+  --success-foreground: #FFFFFF;
+  --info: #0284C7;
+  --info-foreground: #FFFFFF;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --invert: #231E1C;
+  --invert-foreground: #FAF7F2;
 }
 
 .dark {
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.455 0.188 13.697);
-  --primary-foreground: oklch(0.969 0.015 12.422);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.81 0.117 11.638);
-  --chart-2: oklch(0.645 0.246 16.439);
-  --chart-3: oklch(0.586 0.253 17.585);
-  --chart-4: oklch(0.514 0.222 16.935);
-  --chart-5: oklch(0.455 0.188 13.697);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.645 0.246 16.439);
-  --sidebar-primary-foreground: oklch(0.969 0.015 12.422);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
-  --scrollbar-thumb: oklch(0.45 0.015 214 / 45%);
-  --scrollbar-thumb-hover: oklch(0.645 0.246 16.439 / 80%);
-  --scrollbar-thumb-active: oklch(0.645 0.246 16.439 / 95%);
+  /* Atelier Dark Luxury Variant (Velvet Noir / Royal Wine Velvet / Embossed Gold) */
+  --background: #1F0207;
+  --foreground: #FAF7F2;
+
+  --card: #2D050F;
+  --card-foreground: #FAF7F2;
+  --popover: #2D050F;
+  --popover-foreground: #FAF7F2;
+
+  --primary: #E0B159;
+  --primary-foreground: #1F0207;
+
+  --secondary: #3A0814;
+  --secondary-foreground: #FAF7F2;
+
+  --muted: #330A14;
+  --muted-foreground: #C5B8B0;
+
+  --accent: #78070D;
+  --accent-foreground: #FAF7F2;
+
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(224, 177, 89, 0.16);
+  --input: rgba(224, 177, 89, 0.20);
+  --ring: #E0B159;
+
+  --chart-1: #E0B159;
+  --chart-2: #C59B4E;
+  --chart-3: #A8324E;
+  --chart-4: #F5A623;
+  --chart-5: #78070D;
+
+  --sidebar: #1A0206;
+  --sidebar-foreground: #FAF7F2;
+  --sidebar-primary: #E0B159;
+  --sidebar-primary-foreground: #1F0207;
+  --sidebar-accent: #2D050F;
+  --sidebar-accent-foreground: #FAF7F2;
+  --sidebar-border: rgba(224, 177, 89, 0.16);
+  --sidebar-ring: #E0B159;
+
+  --scrollbar-thumb: rgba(224, 177, 89, 0.35);
+  --scrollbar-thumb-hover: #E0B159;
+  --scrollbar-thumb-active: #C59B4E;
   --scrollbar-track: transparent;
-  --destructive-foreground: var(--color-red-600);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-600);
-  --info: var(--color-violet-500);
-  --info-foreground: var(--color-violet-600);
-  --warning: var(--color-yellow-500);
-  --warning-foreground: var(--color-yellow-600);
-  --invert: var(--color-zinc-700);
-  --invert-foreground: var(--color-zinc-50);
+
+  --destructive-foreground: #EF4444;
+  --success: #22C55E;
+  --success-foreground: #140E10;
+  --info: #38BDF8;
+  --info-foreground: #140E10;
+  --warning: #FBBF24;
+  --warning-foreground: #140E10;
+  --invert: #FAF7F2;
+  --invert-foreground: #140E10;
 }
 
 @layer base {
@@ -159,6 +236,11 @@
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  ::selection {
+    background-color: rgba(197, 155, 78, 0.3);
+    color: #78070D;
   }
 
   body {
@@ -243,19 +325,40 @@
 }
 
 .font-brand {
-  font-family: "Comfortaa", "Quicksand", system-ui, sans-serif;
+  font-family: var(--font-brand), "Comfortaa", "Quicksand", system-ui, sans-serif;
+}
+
+.font-subtitle {
+  font-family: var(--font-subtitle), "Marcellus", "Optima", Georgia, serif;
+}
+
+/* 3D Embossed Gold Typography & Gradients (Official Navarachna Atelier) */
+.studio-gold-text {
+  background: linear-gradient(180deg, #FFE8C2 0%, #E0B159 28%, #C59B4E 62%, #8E6339 92%, #704727 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 3px rgba(31, 2, 7, 0.35));
+}
+
+.studio-subtitle-text {
+  font-family: var(--font-subtitle), "Marcellus", Georgia, serif;
+  background: linear-gradient(180deg, #FFE0B2 0%, #D4A359 40%, #B88540 80%, #7A4E20 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.12em;
+  filter: drop-shadow(0 1px 2px rgba(31, 2, 7, 0.25));
 }
 
 input::placeholder {
-  color: #9ca3af;
+  color: var(--color-brand-stone-light, #9B958F);
   font-size: 0.875rem;
 }
 
 /* Card warm diffused drop shadow matching reference image */
 .studio-card-shadow {
-  box-shadow: 0 20px 40px -10px rgba(90, 18, 36, 0.07), 
-              0 8px 18px -6px rgba(0, 0, 0, 0.04), 
-              0 0 0 1px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 20px 40px -10px rgba(120, 7, 13, 0.08), 
+              0 8px 18px -6px rgba(35, 30, 28, 0.04), 
+              0 0 0 1px rgba(120, 7, 13, 0.03);
 }
 
 /* ─── ReUI Sonner Container Enhancements ─── */
