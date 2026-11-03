@@ -1,63 +1,28 @@
 "use client";
 
 import { apiClient, getStoredToken } from "@/lib/api-client";
+import { PAGE_SIZES } from "@/components/expenses/expense-pagination";
+import { ExpenseMobileList } from "@/components/expenses/expense-mobile-list";
+import { ExpenseReceiptPicker } from "@/components/expenses/expense-receipt-picker";
+import { EmptyState as ExpenseEmptyState } from "@/components/expenses/expense-empty-state";
+import { ExpenseDialogs } from "@/components/expenses/expense-dialogs";
+import { cleanStoredReceiptName } from "@/components/expenses/expense-ui-utils";
 import {
   AlertCircle,
-  ArrowDownIcon,
-  ArrowDownToLine,
-  ArrowUpIcon,
   CalendarDays,
   CheckCircle2,
-  Check,
   ChevronLeft,
-  ChevronDown,
-  ChevronRight,
-  ChevronsUpDownIcon,
-  Eye,
-  FileImage,
-  FileText,
-  LoaderCircle,
-  Pencil,
   Plus,
-  Receipt,
   RefreshCw,
   Search,
-  Trash2,
-  UploadCloud,
-  UserRoundPlus,
-  Users as UsersIcon,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  DataGrid,
-  DataGridContainer,
-  dataGridFeatures,
-  type DataGridFeatures,
-} from "@/components/reui/data-grid/data-grid";
-import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
-import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
-import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
+import { dataGridFeatures } from "@/components/reui/data-grid/data-grid";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  ChangeEvent,
   FormEvent,
-  ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -67,38 +32,14 @@ import {
 import { useHeaderAction } from "@/context/header-action-context";
 import { useAuth } from "@/context/dashboard-auth-context";
 import { toast } from "@/components/ui/sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTable } from "@tanstack/react-table";
-import type { ColumnDef, ExpandedState, PaginationState, SortingState } from "@tanstack/react-table";
-import { DataGridTableRowExpand } from "@/components/reui/data-grid/data-grid-table";
+import type { ExpandedState, PaginationState, SortingState } from "@tanstack/react-table";
 import type { DateRange } from "react-day-picker";
-
-type Expense = {
-  id: number;
-  expenseDate: string;
-  amount: number | string;
-  categoryNotes: string;
-  sourcingSpecialists: SourcingSpecialist[];
-  billFileName: string;
-  billUrl?: string;
-  createdBy?: number | null;
-  createdByUsername?: string | null;
-  createdAt?: string;
-  updatedAt?: string | null;
-  updatedBy?: number | null;
-  updatedByUsername?: string | null;
-};
-
-type SourcingSpecialist = { id: number; firstName: string; lastName?: string | null; displayName: string; mobile?: string | null };
+import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
+import { ExpenseDataGrid } from "@/components/expenses/expense-data-grid";
+import { createExpenseColumns } from "@/components/expenses/expense-grid-columns";
+import type { BillPreview, Expense, ExpenseFormValues, ExpenseGridRow, SourcingSpecialist } from "@/components/expenses/expense-types";
 
 type ExpensePageResult = {
   items: Expense[];
@@ -107,32 +48,10 @@ type ExpensePageResult = {
   totalCount: number;
 };
 
-type ExpenseGridRow =
-  | { kind: "date-group"; id: string; expenseDate: string; expenseCount: number; pageSubtotal: number; children: ExpenseGridRow[] }
-  | { kind: "expense"; id: string; expenseDate: string; expense: Expense };
-
 type Feedback = { kind: "success" | "error"; message: string };
-type ExpenseFormValues = {
-  expenseDate: string;
-  amount: string;
-  categoryNotes: string;
-  sourcingSpecialistIds: number[];
-  bill?: File | null;
-};
-
-type BillPreview = {
-  expenseId: number;
-  url: string;
-  contentType: string;
-  fileName: string;
-};
-
 type CachedBillPreview = { promise: Promise<BillPreview>; preview?: BillPreview };
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5207").replace(/\/$/, "");
-const PAGE_SIZES = [10, 20, 50, 100];
-const MAX_BILL_SIZE = 5 * 1024 * 1024;
-const ACCEPTED_BILL_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const EMPLOYEE_AVATAR_PALETTES = [
   "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
   "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
@@ -152,21 +71,6 @@ function getEmployeeAvatarColorClass(employee: SourcingSpecialist) {
 
 function getEmployeeInitials(displayName: string) {
   return displayName.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase();
-}
-
-function ExpenseCellTooltip({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top"><p className="text-xs">{label}</p></TooltipContent>
-    </Tooltip>
-  );
-}
-
-function cleanStoredReceiptName(fileName: string) {
-  if (!fileName) return fileName;
-  const extension = fileName.match(/\.[^.]+$/)?.[0]?.toLowerCase();
-  return extension ? `receipt${extension}` : "image";
 }
 
 function todayLocalIso() {
@@ -248,101 +152,6 @@ function shortDate(value?: string | null) {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short" }).format(new Date(value));
 }
 
-function formatFileSize(bytes?: number) {
-  if (!bytes || bytes <= 0) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function truncateMiddle(name: string, maxLen = 22) {
-  if (!name || name.length <= maxLen) return name;
-  const extIndex = name.lastIndexOf(".");
-  const ext = extIndex !== -1 ? name.slice(extIndex) : "";
-  const nameWithoutExt = extIndex !== -1 ? name.slice(0, extIndex) : name;
-  const keepFront = Math.max(4, maxLen - ext.length - 3);
-  return `${nameWithoutExt.slice(0, keepFront)}…${ext}`;
-}
-
-function ExpensePagination({
-  page,
-  pageCount,
-  pageSize,
-  totalCount,
-  loading,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  page: number;
-  pageCount: number;
-  pageSize: number;
-  totalCount: number;
-  loading: boolean;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-}) {
-  const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, totalCount);
-  const siblingPages = 1;
-  const visiblePages = siblingPages * 2 + 3;
-  const pageButtons: Array<number | { label: string; target: number }> = pageCount <= visiblePages + 2
-    ? Array.from({ length: pageCount }, (_, index) => index + 1)
-    : page <= siblingPages + 3
-      ? [1, 2, 3, 4, 5, { label: "…", target: visiblePages + 1 }, pageCount]
-      : page >= pageCount - siblingPages - 2
-        ? [1, { label: "…", target: pageCount - visiblePages }, ...Array.from({ length: visiblePages }, (_, index) => pageCount - visiblePages + index + 1)]
-        : [1, { label: "…", target: page - siblingPages - 1 }, ...Array.from({ length: visiblePages - 2 }, (_, index) => page - siblingPages + index), { label: "…", target: page + siblingPages + 1 }, pageCount];
-
-  return (
-    <div className="flex grow flex-col flex-wrap items-center justify-between gap-1.5 py-1.5 sm:flex-row sm:py-0">
-      <div className="order-2 flex flex-wrap items-center gap-x-2 pb-1.5 sm:order-1 sm:pb-0">
-        <div className="text-sm text-muted-foreground">Rows per page</div>
-        <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))} disabled={loading}>
-          <SelectTrigger aria-label="Rows per page" className="w-fit min-w-16" size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper" align="start" className="min-w-(--radix-select-trigger-width)">
-            {PAGE_SIZES.map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="order-1 flex flex-col items-center justify-center gap-1.5 pt-1.5 sm:order-2 sm:flex-row sm:justify-end sm:pt-0">
-        <div className="order-1 text-nowrap text-sm text-muted-foreground sm:order-1">
-          {totalCount === 0 ? "No records to show" : `${from} - ${to} of ${totalCount}`}
-        </div>
-        {totalCount > 0 && (
-          <div className="order-2 flex flex-wrap items-center justify-center gap-1 sm:order-2 sm:flex-nowrap">
-            <Button size="icon-sm" variant="ghost" className="p-0 text-sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1 || loading} aria-label="Previous page">
-              <ChevronLeft className="size-4" />
-            </Button>
-            {pageButtons.map((item, index) => typeof item === "number" ? (
-              <Button
-                key={`page-${item}`}
-                size="sm"
-                variant="ghost"
-                aria-label={`Go to page ${item}`}
-                aria-current={page === item ? "page" : undefined}
-                className={`min-w-8 px-1.5 text-sm text-muted-foreground ${page === item ? "bg-accent text-accent-foreground" : ""}`}
-                onClick={() => onPageChange(item)}
-                disabled={loading}
-              >
-                {item}
-              </Button>
-            ) : (
-              <Button key={`ellipsis-${index}`} size="icon-sm" variant="ghost" className="p-0 text-sm" aria-label={`Go to page ${item.target}`} onClick={() => onPageChange(item.target)} disabled={loading}>
-                {item.label}
-              </Button>
-            ))}
-            <Button size="icon-sm" variant="ghost" className="p-0 text-sm" onClick={() => onPageChange(page + 1)} disabled={page >= pageCount || loading} aria-label="Next page">
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 async function multipartRequest<T>(expenseId: number | null, formData: FormData): Promise<T> {
   const endpoint = expenseId === null ? "/api/expenses" : `/api/expenses/${expenseId}`;
   const token = getStoredToken();
@@ -388,272 +197,6 @@ async function getBillBlob(expenseId: number) {
   };
 }
 
-function DialogShell({
-  title,
-  description,
-  onClose,
-  children,
-  wide = false,
-  preserveHeight = false,
-}: {
-  title: string;
-  description?: string;
-  onClose: () => void;
-  children: ReactNode;
-  wide?: boolean;
-  preserveHeight?: boolean;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-[3px]"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={`flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-2xl ${preserveHeight ? "h-[calc(100dvh-2rem)] max-h-[50rem]" : ""} ${wide ? "sm:max-w-2xl" : "sm:max-w-xl md:max-w-2xl"}`}
-      >
-        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-rose-200/70 bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 px-3 py-2.5 shadow-2xs backdrop-blur dark:border-rose-900/40 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40 sm:py-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rose-200/90 bg-white text-primary shadow-xs dark:border-rose-900/60 dark:bg-card">
-              <Receipt className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-              {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="flex size-7.5 shrink-0 items-center justify-center rounded-lg border border-rose-200/90 bg-white text-muted-foreground transition hover:bg-rose-100/70 hover:text-foreground dark:border-rose-900/60 dark:bg-card dark:hover:bg-rose-900/40"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        <div className={`min-h-0 flex-1 px-3 py-2.5 ${preserveHeight ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>{children}</div>
-      </section>
-    </div>
-  );
-}
-
-function BillFilePicker({
-  existingFileName,
-  value,
-  onChange,
-  onPreviewExisting,
-  required,
-  error,
-}: {
-  existingFileName?: string;
-  value: File | null;
-  onChange: (file: File | null) => void;
-  onPreviewExisting?: () => Promise<{ url: string; contentType: string; fileName: string } | null>;
-  required: boolean;
-  error?: string;
-}) {
-  const [localError, setLocalError] = useState("");
-  const [preview, setPreview] = useState<{ url: string; contentType: string; fileName: string } | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => {
-      if (preview?.url) URL.revokeObjectURL(preview.url);
-    };
-  }, [preview?.url]);
-
-  const validateAndSet = (file: File | null, inputEl: HTMLInputElement | null) => {
-    setLocalError("");
-    if (file) {
-      const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
-      if (!ACCEPTED_BILL_EXTENSIONS.includes(extension) || !file.type.startsWith("image/")) {
-        const message = "Choose a JPG, PNG or WEBP image.";
-        setLocalError(message);
-        toast.warning("Unsupported file type", { description: message });
-        if (inputEl) inputEl.value = "";
-        onChange(null);
-        return;
-      }
-      if (file.size > MAX_BILL_SIZE) {
-        const message = "The image must be 5 MB or smaller.";
-        setLocalError(message);
-        toast.warning("File size limit exceeded", { description: message });
-        if (inputEl) inputEl.value = "";
-        onChange(null);
-        return;
-      }
-    }
-    onChange(file);
-  };
-
-  const handleCameraChange = (event: ChangeEvent<HTMLInputElement>) => {
-    validateAndSet(event.target.files?.[0] ?? null, event.target);
-  };
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    validateAndSet(event.target.files?.[0] ?? null, event.target);
-  };
-
-  const hasFile = Boolean(value || existingFileName);
-  const activeFileName = cleanStoredReceiptName(value?.name || existingFileName || "");
-  const isPdf = activeFileName.toLowerCase().endsWith(".pdf");
-  const hasPickerError = Boolean(localError || error);
-
-  const handleView = async () => {
-    if (value) {
-      setPreview({
-        url: URL.createObjectURL(value),
-        contentType: value.type || "image/*",
-        fileName: activeFileName,
-      });
-    } else if (onPreviewExisting) {
-      setPreviewLoading(true);
-      try {
-        const existingPreview = await onPreviewExisting();
-        if (existingPreview) setPreview(existingPreview);
-      } catch (previewError) {
-        toast.error("Unable to preview receipt", {
-          description: previewError instanceof Error ? previewError.message : "Please try again.",
-        });
-      } finally {
-        setPreviewLoading(false);
-      }
-    }
-  };
-
-  const handleRemove = () => {
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setLocalError("");
-    onChange(null);
-  };
-
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-foreground">
-        Bill / receipt {required ? <span className="text-primary">*</span> : null}
-      </label>
-
-      {/* Hidden inputs for camera and file picker */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-        capture="environment"
-        onChange={handleCameraChange}
-        className="sr-only"
-      />
-      {hasFile ? (
-        <div className={`flex items-center justify-between gap-2 rounded-[12px] border bg-card p-2.5 ${hasPickerError ? "border-destructive ring-2 ring-destructive/20" : "border-border"}`}>
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              {isPdf ? <FileText className="size-4.5" /> : <FileImage className="size-4.5" />}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-foreground" title={activeFileName}>
-                {truncateMiddle(activeFileName, 34)}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {value ? formatFileSize(value.size) : "Attached receipt"}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => void handleView()}
-              disabled={previewLoading}
-              aria-label="View uploaded photo"
-              title="View uploaded photo"
-              className="flex size-8 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {previewLoading ? <LoaderCircle className="size-4 animate-spin" /> : <Eye className="size-4" />}
-            </button>
-            {value ? (
-              <button
-                type="button"
-                aria-label="Delete uploaded photo"
-                title="Delete uploaded photo"
-                onClick={handleRemove}
-                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
-              >
-                <UploadCloud className="size-3.5" /> Replace
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => cameraInputRef.current?.click()}
-            aria-invalid={hasPickerError}
-            className={`flex h-10 items-center justify-center gap-2 rounded-[12px] border border-dashed bg-muted/25 px-3 text-xs font-semibold text-foreground transition sm:hidden ${hasPickerError ? "border-destructive ring-2 ring-destructive/20" : "border-border hover:border-primary/60 hover:bg-primary/[0.035] focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-          >
-            <FileImage className="size-4 text-primary" /> Take photo
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            aria-invalid={hasPickerError}
-            className={`col-span-1 flex h-10 items-center justify-center gap-2 rounded-[12px] border border-dashed bg-muted/25 px-3 text-xs font-semibold text-foreground transition sm:col-span-2 ${hasPickerError ? "border-destructive ring-2 ring-destructive/20" : "border-border hover:border-primary/60 hover:bg-primary/[0.035] focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-          >
-            <UploadCloud className="size-4 text-primary" /> Upload a photo
-          </button>
-        </div>
-      )}
-      <input
-        ref={fileInputRef}
-        type="file"
-        name="bill"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-        aria-required={required}
-        onChange={handleFileChange}
-        className="sr-only"
-      />
-
-      {preview ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
-          <section role="dialog" aria-modal="true" aria-label={`Preview ${preview.fileName}`} className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-rose-200/70 bg-gradient-to-r from-rose-50/95 via-pink-50/70 to-rose-50/95 px-3 py-2.5 dark:border-rose-900/40 dark:from-rose-950/40 dark:via-pink-950/25 dark:to-rose-950/40">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground" title={preview.fileName}>{preview.fileName}</p>
-              </div>
-              <button type="button" onClick={() => setPreview(null)} aria-label="Close receipt preview" className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-rose-200/90 bg-white text-muted-foreground transition hover:bg-rose-100/70 hover:text-foreground dark:border-rose-900/60 dark:bg-card dark:hover:bg-rose-900/40">
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="min-h-0 overflow-auto bg-muted/20 p-2.5 sm:p-3">
-              {preview.contentType.startsWith("image/") ? (
-                <img src={preview.url} alt={`Preview of ${preview.fileName}`} className="mx-auto max-h-[70dvh] w-full object-contain" />
-              ) : preview.contentType.includes("pdf") || preview.fileName.toLowerCase().endsWith(".pdf") ? (
-                <iframe src={preview.url} title={`Preview of ${preview.fileName}`} className="h-[70dvh] w-full rounded-lg bg-white" />
-              ) : (
-                <p className="py-12 text-center text-sm text-muted-foreground">Preview is not available for this file type.</p>
-              )}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {localError || error ? <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="mt-0.5 size-3.5 shrink-0" />{localError || error}</p> : null}
-    </div>
-  );
-}
 
 export default function ExpensesPage() {
   const { user: currentUser } = useAuth();
@@ -1448,184 +991,12 @@ export default function ExpensesPage() {
     ));
   }, [gridRows, groupByDate]);
 
-  const columns = useMemo<ColumnDef<DataGridFeatures, ExpenseGridRow>[]>(
-    () => [
-      {
-        accessorFn: (item) => item.expenseDate,
-        id: "expenseDate",
-        header: ({ column }) => (
-          <Tooltip>
-            <DropdownMenu>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Date column options" className="-ms-2 inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-left text-xs font-semibold text-foreground/80 transition hover:bg-secondary data-[state=open]:bg-secondary">
-                    Date
-                    {column.getIsSorted() === "asc" ? <ArrowUpIcon className="size-3.25" aria-hidden="true" /> : column.getIsSorted() === "desc" ? <ArrowDownIcon className="size-3.25" aria-hidden="true" /> : <ChevronsUpDownIcon className="size-3.5 opacity-60" aria-hidden="true" />}
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <DropdownMenuContent align="start" className="w-44 rounded-xl border border-border/60 bg-popover shadow-lg">
-                <DropdownMenuItem onSelect={() => column.toggleSorting(false)} className="cursor-pointer text-xs">Sort oldest first</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => column.toggleSorting(true)} className="cursor-pointer text-xs">Sort newest first</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuRadioGroup value={groupByDate ? "date" : "none"} onValueChange={(value) => setGroupByDate(value === "date")}>
-                  <DropdownMenuRadioItem value="date" className="cursor-pointer text-xs">Group by date</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="none" className="cursor-pointer text-xs">Ungroup</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <TooltipContent side="top"><p className="text-xs">Date options</p></TooltipContent>
-          </Tooltip>
-        ),
-        cell: ({ row }) => row.original.kind === "date-group" ? (
-          <div className="flex min-w-0 items-center gap-1.5">
-            <DataGridTableRowExpand row={row} indent={0}>
-              <ChevronDown className="size-3.5 transition-transform in-aria-[expanded=false]:-rotate-90" />
-            </DataGridTableRowExpand>
-            <span className="shrink-0 whitespace-nowrap text-left text-xs font-semibold text-foreground">{row.original.expenseDate === "undated" ? "Undated expenses" : formatDate(row.original.expenseDate)}</span>
-            <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">{row.original.expenseCount} {row.original.expenseCount === 1 ? "expense" : "expenses"}</span>
-          </div>
-        ) : groupByDate ? null : (
-          <span className="block whitespace-nowrap text-left text-xs text-muted-foreground">{formatDate(row.original.expenseDate)}</span>
-        ),
-        meta: { skeleton: <Skeleton className="mx-auto h-3.5 w-20 rounded-md" /> },
-        size: 140,
-        enableSorting: true,
-      },
-      {
-        accessorFn: (item) => item.kind === "date-group" ? dateSubtotals?.[item.expenseDate] ?? item.pageSubtotal : Number(item.expense.amount),
-        id: "amount",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Amount" className="w-full justify-end text-right text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => row.original.kind === "date-group" ? (
-          <ExpenseCellTooltip label="Subtotal for all matching expenses on this date"><div className="flex flex-col items-end justify-center gap-0.5 text-right">
-            <span className="whitespace-nowrap text-[10px] text-primary/80">Date subtotal</span>
-            <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-primary">{dateSubtotals ? formatCurrency(dateSubtotals[row.original.expenseDate] || 0) : "—"}</span>
-          </div></ExpenseCellTooltip>
-        ) : <span className="block whitespace-nowrap text-right text-xs font-semibold tabular-nums text-foreground">{formatCurrency(row.original.expense.amount)}</span>,
-        meta: { skeleton: <Skeleton className="mx-auto h-3.5 w-16 rounded-md" /> },
-        size: 130,
-        enableSorting: true,
-      },
-      {
-        id: "handledBy",
-        accessorFn: (item) => item.kind === "expense" ? item.expense.sourcingSpecialists.map((person) => person.displayName).join(", ") : "",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Handled By" className="w-full justify-start text-left text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => {
-          if (row.original.kind !== "expense") return null;
-          const expense = row.original.expense;
-          const specialists = expense.sourcingSpecialists || [];
-          const name = specialists.map((person) => person.displayName).join(", ") || "Unassigned";
-          const visibleSpecialists = specialists.slice(0, 2);
-          const additionalCount = Math.max(0, specialists.length - visibleSpecialists.length);
-          return (
-            <div className="flex min-w-0 items-center gap-1.5 py-0.5">
-              {visibleSpecialists.length ? visibleSpecialists.map((specialist) => <ExpenseCellTooltip key={specialist.id} label={specialist.displayName}><Avatar className="size-7 shrink-0">
-                <AvatarFallback className={`text-[10px] font-bold ${getEmployeeAvatarColorClass(specialist)}`}>{getEmployeeInitials(specialist.displayName)}</AvatarFallback>
-              </Avatar></ExpenseCellTooltip>) : <span className="text-xs text-muted-foreground">—</span>}
-              {additionalCount > 0 ? <ExpenseCellTooltip label={specialists.slice(2).map((person) => person.displayName).join(", ")}><span aria-label={`${additionalCount} additional employees`} className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[10px] font-bold leading-none text-primary">+{additionalCount}</span></ExpenseCellTooltip> : null}
-            </div>
-          );
-        },
-        meta: {
-          skeleton: <Skeleton className="h-3.5 w-32 rounded-md" />,
-        },
-        size: 105,
-        enableSorting: false,
-      },
-      {
-        accessorFn: (item) => item.kind === "expense" ? item.expense.billFileName : "",
-        id: "receipt",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Receipt" className="w-full justify-start text-left text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => {
-          if (row.original.kind !== "expense") return null;
-          const expense = row.original.expense;
-          return (
-            <div className="flex min-w-0 justify-start pr-3">
-            <ExpenseCellTooltip label={originalReceiptNames[expense.id] || expense.billFileName || "No receipt attached"}><div className="inline-flex w-fit max-w-full min-w-0 items-center gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-1.5 text-xs font-medium text-foreground">
-              {expense.billFileName?.toLowerCase().endsWith(".pdf") ? <FileText className="size-3.5 shrink-0" /> : <FileImage className="size-3.5 shrink-0" />}
-              <span className="min-w-0 truncate">{displayReceiptName(expense) || "View bill"}</span>
-            </div></ExpenseCellTooltip>
-            </div>
-          );
-        },
-        meta: { skeleton: <Skeleton className="mx-auto h-7 w-32 rounded-lg" /> },
-        size: 150,
-        enableSorting: false,
-      },
-      {
-        accessorFn: (item) => item.kind === "expense" ? item.expense.updatedAt ?? item.expense.createdAt : item.expenseDate,
-        id: "updatedAt",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Updated At" className="w-full justify-start text-left text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => {
-          if (row.original.kind !== "expense") return null;
-          const expense = row.original.expense;
-          const isUpdated = expense.updatedAt != null;
-          return (
-            <ExpenseCellTooltip label={isUpdated ? "Last updated timestamp" : "No updates yet — showing created timestamp"}><span className="inline-block whitespace-nowrap text-left text-xs text-muted-foreground">
-              {formatAuditDateTime(expense.updatedAt ?? expense.createdAt)}
-            </span></ExpenseCellTooltip>
-          );
-        },
-        meta: { skeleton: <Skeleton className="h-3.5 w-28 rounded-md" /> },
-        size: 175,
-        enableSorting: true,
-      },
-      {
-        accessorFn: (item) => item.kind === "expense" ? item.expense.updatedBy ?? item.expense.createdBy : "",
-        id: "updatedBy",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Updated By" className="w-full justify-start text-left text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => {
-          if (row.original.kind !== "expense") return null;
-          const expense = row.original.expense;
-          const isUpdated = expense.updatedBy != null;
-          const actorId = expense.updatedBy ?? expense.createdBy;
-          const currentActorName = actorId != null && actorId === currentUser?.id
-            ? currentUser.firstName
-            : null;
-          const actorName = isUpdated
-            ? expense.updatedByUsername ?? currentActorName ?? (actorId != null ? `#${actorId}` : "—")
-            : expense.createdByUsername ?? currentActorName ?? (actorId != null ? `#${actorId}` : "—");
-          return (
-            <ExpenseCellTooltip label={isUpdated ? "Last updated by" : "No updates yet — showing created by"}><span className="inline-block max-w-[130px] truncate text-left text-xs text-muted-foreground">
-              {actorName}
-            </span></ExpenseCellTooltip>
-          );
-        },
-        meta: { skeleton: <Skeleton className="h-3.5 w-16 rounded-md" /> },
-        size: 135,
-        enableSorting: true,
-      },
-      {
-        id: "actions",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title="Actions" className="w-full justify-center text-center text-xs font-semibold text-foreground/80" />
-        ),
-        cell: ({ row }) => {
-          if (row.original.kind !== "expense") return null;
-          const expense = row.original.expense;
-          return (
-            <div className="flex items-center justify-center gap-1">
-              <Tooltip><TooltipTrigger asChild><button type="button" onClick={() => openEditForm(expense)} aria-label="Edit expense" className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"><Pencil className="size-4" /></button></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Edit expense</p></TooltipContent></Tooltip>
-              <Tooltip><TooltipTrigger asChild><button type="button" onPointerEnter={() => prefetchBill(expense)} onFocus={() => prefetchBill(expense)} onClick={() => openDetails(expense)} aria-label="View expense details" className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"><Eye className="size-4" /></button></TooltipTrigger><TooltipContent side="top"><p className="text-xs">View details</p></TooltipContent></Tooltip>
-              <Tooltip><TooltipTrigger asChild><button type="button" onClick={() => requestDeleteExpense(expense)} aria-label="Delete expense" className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-4" /></button></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Delete expense</p></TooltipContent></Tooltip>
-            </div>
-          );
-        },
-        meta: { skeleton: <Skeleton className="mx-auto h-7 w-20 rounded-md" /> },
-        size: 105,
-        enableSorting: false,
-      },
-    ],
+  const columns = useMemo(
+    () => createExpenseColumns({
+      currentUser, dateSubtotals, groupByDate, setGroupByDate, originalReceiptNames,
+      displayReceiptName, getEmployeeAvatarColorClass, getEmployeeInitials, formatDate,
+      formatCurrency, formatAuditDateTime, openDetails, openEditForm, requestDeleteExpense, prefetchBill,
+    }),
     [currentUser?.firstName, currentUser?.id, dateSubtotals, displayReceiptName, groupByDate, openDetails, openEditForm, originalReceiptNames, prefetchBill, requestDeleteExpense]
   );
 
@@ -1797,6 +1168,7 @@ export default function ExpensesPage() {
             <div className="p-2 md:hidden">
               <div className="rounded-xl border border-border/80 bg-background shadow-lg">
                 <Calendar
+                  rangeBand
                   mode="range"
                   month={calendarMonth}
                   onMonthChange={setCalendarMonth}
@@ -1816,11 +1188,13 @@ export default function ExpensesPage() {
             <div className="hidden p-2 md:block">
               <div className="w-full rounded-xl border border-border/80 bg-background shadow-lg">
                 <Calendar
+                  rangeBand
                   mode="range"
                   month={calendarMonth}
                   onMonthChange={setCalendarMonth}
                   numberOfMonths={2}
                   fixedWeeks
+                  showOutsideDays={false}
                   selected={draftDateRange}
                   onSelect={handleDateRangeSelect}
                   disabled={{ after: new Date() }}
@@ -1835,333 +1209,73 @@ export default function ExpensesPage() {
           </div>
         ) : null}
 
-        {/* Desktop grid fills the expense card like Employee List; rows scroll inside the table viewport. */}
+        {/* Desktop expense table */}
         <div className="hidden min-h-0 flex-1 md:flex md:flex-col">
-          <DataGrid
+          <ExpenseDataGrid
             table={table}
             recordCount={totalCount}
             isLoading={loading}
-            loadingMode="skeleton"
-            tableLayout={{ dense: true, rowBorder: true, stripped: true, rowRounded: false, headerSticky: true }}
-            tableClassNames={{
-              base: "w-full min-w-full",
-              headerSticky: "sticky top-0 z-20 bg-muted",
-              bodyRow: "[&[data-row-id^='group:']]:!bg-muted/70 [&[data-row-id^='group:']>td]:border-y-4 [&[data-row-id^='group:']>td]:border-white",
-            }}
-            emptyMessage={<EmptyState hasFilters={hasFilters} onClear={clearFilters} />}
-          >
-            <div className="w-full flex-1 min-h-0 flex flex-col justify-between">
-              <DataGridContainer className="w-full flex-1 min-h-0 overflow-hidden flex flex-col">
-                <DataGridScrollArea className="w-full flex-1 min-h-0">
-                  <DataGridTable />
-                </DataGridScrollArea>
-              </DataGridContainer>
-              <div className="shrink-0 grid grid-cols-[140fr_130fr_105fr_150fr_175fr_135fr_105fr] items-center border-t border-border/50 px-1 py-2 text-xs">
-                <span />
-                <span className="flex min-w-0 items-baseline justify-end gap-1.5 pr-2 text-right text-muted-foreground">
-                  <span className="whitespace-nowrap">Current page total</span>
-                  <strong className="whitespace-nowrap font-semibold tabular-nums text-primary">{formatCurrency(currentPageTotal)}</strong>
-                </span>
-                <span /><span /><span /><span />
-                <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-right text-muted-foreground">
-                  <span className="whitespace-nowrap">Total expenses</span>
-                  <strong aria-live="polite" className="whitespace-nowrap font-semibold tabular-nums text-primary">{totalExpensesAmount === null ? "—" : formatCurrency(totalExpensesAmount)}</strong>
-                </span>
-              </div>
-              <div className="shrink-0 pt-1.5 mt-auto">
-                <DataGridPagination sizes={[10, 20, 50, 100]} />
-              </div>
-            </div>
-          </DataGrid>
+            emptyMessage={<ExpenseEmptyState hasFilters={hasFilters} onClear={clearFilters} />}
+            currentPageTotal={formatCurrency(currentPageTotal)}
+            totalExpensesAmount={totalExpensesAmount === null ? "—" : formatCurrency(totalExpensesAmount)}
+          />
         </div>
 
-        {/* Mobile View ONLY (Inner scroll container with pull-to-refresh & compact cards) */}
-        <div className="flex min-h-0 flex-1 flex-col md:hidden">
-          {/* Pull-to-refresh spinner indicator */}
-          {pullDelta > 0 ? (
-            <div
-              className="flex items-center justify-center overflow-hidden transition-all duration-100 ease-out"
-              style={{ height: pullDelta }}
-            >
-              <LoaderCircle className="size-5 animate-spin text-primary" />
-            </div>
-          ) : null}
-          {refreshing && pullDelta === 0 ? (
-            <div className="flex items-center justify-center py-2">
-              <LoaderCircle className="size-5 animate-spin text-primary" />
-            </div>
-          ) : null}
-
-          {/* Inner scroll container: blocks native pull-to-refresh via overscroll-contain */}
-          <div
-            ref={listRef}
-            className="min-h-0 max-h-[calc(100dvh-11.5rem)] flex-1 overflow-y-auto overscroll-y-contain px-2.5 pb-3 sm:px-3 md:max-h-none"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={() => void handleTouchEnd()}
-            onScroll={handleMobileScroll}
-          >
-            {loading ? (
-              <div className="flex flex-col gap-1.5">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={`mobile-loading-${index}`} className="h-[68px] animate-pulse rounded-[16px] bg-muted/70" />
-                ))}
-              </div>
-            ) : expenses.length === 0 ? (
-              <div className="py-8 text-center">
-                <EmptyState hasFilters={hasFilters} onClear={clearFilters} />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {expenses.map((expense) => (
-                  <article
-                    key={expense.id}
-                    onClick={() => void openDetails(expense)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        void openDetails(expense);
-                      }
-                    }}
-                    aria-label={`View expense for ${(expense.sourcingSpecialists || []).map((employee) => employee.displayName).join(", ") || "unassigned specialist"}, ${formatCurrency(expense.amount)}`}
-                    className="group flex min-h-[68px] w-full cursor-pointer flex-col justify-between rounded-xl border border-border/70 bg-card p-2.5 shadow-2xs transition hover:border-primary/25 hover:shadow-xs active:bg-muted/40"
-                  >
-                    <div className="flex min-w-0 items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-                        <CalendarDays className="size-3.5 shrink-0 text-primary" />
-                        <span className="truncate text-xs font-medium">
-                          {formatDate(expense.expenseDate)}
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-right text-sm font-semibold leading-tight tabular-nums text-foreground">
-                        {formatCurrency(expense.amount)}
-                      </span>
-                    </div>
-                    <div className="flex min-w-0 items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Receipt className="size-3.5" />
-                        </span>
-                        <div className="flex min-w-0 items-center gap-1.5" title={expense.sourcingSpecialists?.map((employee) => employee.displayName).join(", ") || "Unassigned"}>
-                          <span className="min-w-0 truncate text-xs font-semibold text-foreground">{expense.sourcingSpecialists?.[0]?.displayName || "Unassigned"}</span>
-                          {(expense.sourcingSpecialists?.length || 0) > 1 && (
-                            <span aria-label={`${expense.sourcingSpecialists.length - 1} additional ${expense.sourcingSpecialists.length === 2 ? "employee" : "employees"}`} className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[10px] font-bold leading-none text-primary">
-                              +{expense.sourcingSpecialists.length - 1}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/70" />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-
-          </div>
-          <div className="shrink-0 border-t border-border/50 px-2.5 pt-1.5 sm:px-3">
-            <div className="flex items-center justify-between gap-2 pb-1.5 text-[11px]">
-              <span className="text-muted-foreground">Current page total <strong className="ml-1 font-semibold tabular-nums text-primary">{formatCurrency(currentPageTotal)}</strong></span>
-              <span className="text-muted-foreground">Total expenses <strong className="ml-1 font-semibold tabular-nums text-primary">{totalExpensesAmount === null ? "—" : formatCurrency(totalExpensesAmount)}</strong></span>
-            </div>
-            <ExpensePagination
-              page={page}
-              pageCount={pageCount}
-              pageSize={pageSize}
-              totalCount={totalCount}
-              loading={loading}
-              onPageChange={setPage}
-              onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
-            />
-          </div>
-        </div>
+        <ExpenseMobileList
+          pullDelta={pullDelta}
+          refreshing={refreshing}
+          listRef={listRef}
+          handleTouchStart={handleTouchStart}
+          handleTouchMove={handleTouchMove}
+          handleTouchEnd={handleTouchEnd}
+          handleMobileScroll={handleMobileScroll}
+          loading={loading}
+          expenses={expenses}
+          hasFilters={hasFilters}
+          clearFilters={clearFilters}
+          openDetails={openDetails}
+          formatDate={formatDate}
+          formatCurrency={formatCurrency}
+          currentPageTotal={currentPageTotal}
+          totalExpensesAmount={totalExpensesAmount}
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+        />
 
       </section>
 
-      {/* Create / edit Form */}
+      {/* Create / edit form */}
       {formOpen ? (
-        <DialogShell
-          title={editingExpense ? "Edit expense" : "Add a new expense"}
-          description={editingExpense ? "Update the expense details, assigned employees, and receipt." : "Record the expense date, amount, assigned employees, and receipt."}
-          onClose={requestCloseExpenseForm}
-        >
-          <form noValidate onSubmit={submitExpense} className="space-y-2.5">
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {/* Date field: Normal field with calendar icon on left, date text, no dropdown arrow */}
-              <label className="block text-sm font-medium text-foreground">
-                Expense date <span className="text-primary">*</span>
-                <span className="relative mt-1.5 block">
-                  <button
-                    type="button"
-                    aria-invalid={Boolean(fieldErrors.expenseDate)}
-                    onClick={() => {
-                      const selected = formValues.expenseDate ? new Date(`${formValues.expenseDate}T00:00:00`) : new Date();
-                      setExpenseCalendarMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
-                      setExpenseDatePickerOpen((open) => !open);
-                    }}
-                    className={`flex h-9 w-full items-center gap-2.5 rounded-[12px] border bg-background px-3 text-left text-sm outline-none transition ${fieldErrors.expenseDate ? "border-destructive ring-2 ring-destructive/20 focus:border-destructive focus:ring-destructive/20" : "border-input hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-                  >
-                    <CalendarDays className="size-4 text-primary shrink-0" />
-                    <span className="flex-1 font-medium text-foreground">
-                      {formValues.expenseDate ? formatDate(formValues.expenseDate) : "Choose expense date"}
-                    </span>
-                  </button>
-                  {expenseDatePickerOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-[min(21rem,calc(100vw-3rem))] rounded-2xl border border-border bg-background p-2.5 shadow-xl">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <button type="button" aria-label="Previous month" onClick={() => setExpenseCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted"><ChevronDown className="size-4 rotate-90" /></button>
-                        <p className="text-sm font-semibold">{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(expenseCalendarMonth)}</p>
-                        <button type="button" aria-label="Next month" disabled={expenseCalendarMonth.getFullYear() === new Date().getFullYear() && expenseCalendarMonth.getMonth() >= new Date().getMonth()} onClick={() => setExpenseCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex size-8 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"><ChevronDown className="size-4 -rotate-90" /></button>
-                      </div>
-                      <div className="grid grid-cols-7 text-center">
-                        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-1.5 text-[10px] font-medium text-muted-foreground">{day}</span>)}
-                        {expenseCalendarDays.map((day) => {
-                          const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-                          const selected = iso === formValues.expenseDate;
-                          const inMonth = day.getMonth() === expenseCalendarMonth.getMonth();
-                          const disabled = iso > todayLocalIso();
-                          return (
-                            <button
-                              key={iso}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => {
-                                updateFormField("expenseDate", iso);
-                                setExpenseDatePickerOpen(false);
-                              }}
-                              className={`mx-auto my-0.5 flex aspect-square w-full max-w-8 items-center justify-center rounded-lg text-xs ${selected ? "bg-primary font-bold text-primary-foreground" : inMonth ? "text-foreground hover:bg-muted" : "text-muted-foreground/40"} ${disabled ? "cursor-not-allowed opacity-30" : ""}`}
-                            >
-                              {day.getDate()}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-2 flex justify-end border-t border-border pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            updateFormField("expenseDate", todayLocalIso());
-                            setExpenseDatePickerOpen(false);
-                          }}
-                          className="rounded-lg px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10"
-                        >
-                          Today
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </span>
-                {fieldErrors.expenseDate ? <span className="mt-1 block text-xs text-destructive">{fieldErrors.expenseDate}</span> : null}
-              </label>
-
-              {/* Amount field */}
-              <label className="block text-sm font-medium text-foreground">
-                Amount (INR) <span className="text-primary">*</span>
-                <span className="relative mt-1.5 block">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">₹</span>
-                  <Input
-                    type="number"
-                    name="amount"
-                    min="0.01"
-                    max="9999999.99"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={formValues.amount}
-                    onChange={(event) => updateFormField("amount", event.target.value)}
-                    required
-                    aria-invalid={Boolean(fieldErrors.amount)}
-                    placeholder="0.00"
-                    className={`h-9 w-full rounded-[12px] border bg-background pl-8 pr-3 text-sm outline-none transition ${fieldErrors.amount ? "border-destructive ring-2 ring-destructive/20 focus:border-destructive focus:ring-destructive/20" : "border-input focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-                  />
-                </span>
-                {fieldErrors.amount ? <span className="mt-1 block text-xs text-destructive">{fieldErrors.amount}</span> : null}
-              </label>
-            </div>
-
-            <div className="relative block text-sm font-medium text-foreground">
-              <span>Handled By <span className="text-primary">*</span></span>
-              <Popover open={specialistPickerOpen} onOpenChange={setSpecialistPickerOpen}>
-              <PopoverTrigger asChild><button
-                type="button"
-                aria-expanded={specialistPickerOpen}
-                aria-haspopup="listbox"
-                aria-invalid={Boolean(fieldErrors.sourcingSpecialistIds)}
-                className={`mt-1 flex h-9 w-full items-center gap-2 rounded-[12px] border bg-background px-3 text-left text-sm outline-none transition ${fieldErrors.sourcingSpecialistIds ? "border-destructive ring-2 ring-destructive/20 focus:border-destructive focus:ring-destructive/20" : "border-input hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-              >
-                <UsersIcon className="size-4 shrink-0 text-primary" />
-                <span className="flex-1 truncate text-foreground">
-                  {formValues.sourcingSpecialistIds.length
-                    ? `${formValues.sourcingSpecialistIds.length} selected`
-                    : "Choose one or more employees"}
-                </span>
-                <ChevronDown className={`size-4 text-muted-foreground transition ${specialistPickerOpen ? "rotate-180" : ""}`} />
-              </button></PopoverTrigger>
-              {formValues.sourcingSpecialistIds.length ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {sourcingSpecialists.filter((employee) => formValues.sourcingSpecialistIds.includes(employee.id)).map((employee) => (
-                    <button
-                      key={employee.id}
-                      type="button"
-                      onClick={() => toggleSourcingSpecialist(employee.id)}
-                      aria-label={`Remove ${employee.displayName}`}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.07] px-2.5 py-1 text-xs font-medium text-foreground hover:bg-primary/10"
-                    >
-                      <span className="truncate">{employee.displayName}</span><X className="size-3 shrink-0 text-primary" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {fieldErrors.sourcingSpecialistIds ? <p className="mt-1 text-xs text-destructive">{fieldErrors.sourcingSpecialistIds}</p> : null}
-              <PopoverContent align="start" side="bottom" sideOffset={5} style={{ width: "min(34rem, var(--radix-popover-trigger-width))" }} className="z-[80] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-background p-0 shadow-lg">
-                  <div className="border-b border-border p-2">
-                    <Input
-                      type="search"
-                      value={specialistSearch}
-                      onChange={(event) => setSpecialistSearch(event.target.value)}
-                      placeholder="Search employees"
-                      aria-label="Search employees for Handled By"
-                      className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                    />
-                  </div>
-                  <div role="listbox" aria-multiselectable="true" aria-label="Employees available for Handled By" className="max-h-[220px] overflow-y-auto">
-                    <div className="sticky top-0 z-10 grid grid-cols-[1rem_minmax(0,1fr)_9rem] items-center gap-2 border-b border-border bg-background px-2 py-2 text-[11px] font-semibold text-muted-foreground"><span aria-hidden="true" /><span>Name</span><span className="text-center">Phone number</span></div>
-                    {sourcingSpecialists.filter((employee) => `${employee.displayName} ${employee.mobile || ""}`.toLowerCase().includes(specialistSearch.trim().toLowerCase())).length ? (
-                      sourcingSpecialists
-                        .filter((employee) => `${employee.displayName} ${employee.mobile || ""}`.toLowerCase().includes(specialistSearch.trim().toLowerCase()))
-                        .map((employee) => {
-                          const selected = formValues.sourcingSpecialistIds.includes(employee.id);
-                          return (
-                            <button
-                              key={employee.id}
-                              type="button"
-                              role="option"
-                              aria-selected={selected}
-                              onClick={() => toggleSourcingSpecialist(employee.id)}
-                              className="grid min-h-8 w-full grid-cols-[1rem_minmax(0,1fr)_9rem] items-center gap-2 rounded-md px-2 text-left text-sm text-foreground hover:bg-muted"
-                            >
-                              <span className={`flex size-4 shrink-0 items-center justify-center rounded-sm border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"}`}>
-                                {selected ? <Check className="size-3 stroke-[3]" /> : null}
-                              </span>
-                              <span className="flex min-w-0 items-center gap-2">
-                                <Avatar className="size-6 shrink-0"><AvatarFallback className={`text-[9px] font-bold ${getEmployeeAvatarColorClass(employee)}`}>{getEmployeeInitials(employee.displayName)}</AvatarFallback></Avatar>
-                                <span className="truncate">{employee.displayName}</span>
-                              </span>
-                              <span className="whitespace-nowrap text-center text-xs text-muted-foreground">{employee.mobile || "—"}</span>
-                            </button>
-                          );
-                        })
-                    ) : (
-                      <p className="px-2.5 py-2 text-xs text-muted-foreground">No active employees found.</p>
-                    )}
-                  </div>
-              </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Required image receipt picker */}
-            <BillFilePicker
+        <ExpenseFormDialog
+          editingExpense={editingExpense}
+          formValues={formValues}
+          fieldErrors={fieldErrors}
+          formError={formError}
+          saving={saving}
+          expenseDatePickerOpen={expenseDatePickerOpen}
+          setExpenseDatePickerOpen={setExpenseDatePickerOpen}
+          expenseCalendarMonth={expenseCalendarMonth}
+          setExpenseCalendarMonth={setExpenseCalendarMonth}
+          expenseCalendarDays={expenseCalendarDays}
+          specialistPickerOpen={specialistPickerOpen}
+          setSpecialistPickerOpen={setSpecialistPickerOpen}
+          sourcingSpecialists={sourcingSpecialists}
+          specialistSearch={specialistSearch}
+          setSpecialistSearch={setSpecialistSearch}
+          requestCloseExpenseForm={requestCloseExpenseForm}
+          submitExpense={submitExpense}
+          updateFormField={updateFormField}
+          toggleSourcingSpecialist={toggleSourcingSpecialist}
+          getEmployeeAvatarColorClass={getEmployeeAvatarColorClass}
+          getEmployeeInitials={getEmployeeInitials}
+          formatDate={formatDate}
+          todayLocalIso={todayLocalIso}
+          receiptPicker={
+            <ExpenseReceiptPicker
               existingFileName={editingExpense ? displayReceiptName(editingExpense) : undefined}
               value={formValues.bill || null}
               onChange={(file) => updateFormField("bill", file)}
@@ -2177,284 +1291,33 @@ export default function ExpensesPage() {
               required
               error={fieldErrors.bill}
             />
-
-            {/* Category / notes with a live character counter */}
-            <label className="block text-sm font-medium text-foreground">
-              <span className="flex items-center justify-between gap-3">
-                <span>Category / notes <span className="text-muted-foreground">(optional)</span></span>
-                <span aria-live="polite" className="shrink-0 text-xs font-normal text-muted-foreground">{formValues.categoryNotes.length}/250</span>
-              </span>
-              <textarea
-                name="categoryNotes"
-                rows={3}
-                maxLength={250}
-                value={formValues.categoryNotes}
-                onChange={(event) => updateFormField("categoryNotes", event.target.value)}
-                aria-invalid={Boolean(fieldErrors.categoryNotes)}
-                placeholder="e.g. Fabric purchase, tailoring supplies, 2 Shirts order"
-                className={`mt-1 block w-full resize-none rounded-[12px] border bg-background px-3 py-1.5 text-sm leading-relaxed outline-none transition placeholder:text-muted-foreground/80 ${fieldErrors.categoryNotes ? "border-destructive ring-2 ring-destructive/20 focus:border-destructive focus:ring-destructive/20" : "border-input focus:border-primary focus:ring-4 focus:ring-primary/10"}`}
-              />
-              {fieldErrors.categoryNotes ? <span className="mt-1 block text-xs text-destructive">{fieldErrors.categoryNotes}</span> : null}
-            </label>
-
-            {formError ? (
-              <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/[0.06] px-3 py-2.5 text-sm text-destructive">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                <span>{formError}</span>
-              </div>
-            ) : null}
-
-            {/* Fixed footer: Cancel + Create expense */}
-            <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={requestCloseExpenseForm}
-                disabled={saving}
-                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-destructive/60 bg-background px-3 text-xs font-medium text-destructive shadow-2xs transition-colors hover:border-destructive hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <X className="size-3.5" />
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-emerald-600 px-4 text-xs font-medium text-white shadow-xs transition-colors hover:bg-emerald-700 active:bg-emerald-800 focus-visible:ring-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? <LoaderCircle className="size-3.5 animate-spin" /> : editingExpense ? <Check className="size-3.5" /> : <UserRoundPlus className="size-3.5" />}
-                {saving ? "Saving..." : editingExpense ? "Save Changes" : "Create expense"}
-              </button>
-            </div>
-          </form>
-        </DialogShell>
+          }
+        />
       ) : null}
 
-      <AlertDialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
-        <AlertDialogContent className="z-[70] w-[calc(100vw-2rem)] max-w-[360px] gap-0 overflow-hidden rounded-2xl border border-border/80 bg-card p-0 shadow-2xl sm:w-full">
-          <div className="flex min-w-0 items-start gap-2.5 p-3 sm:p-3.5">
-            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive">
-              <AlertCircle className="size-4.5" />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col justify-center">
-              <AlertDialogTitle className="text-sm font-semibold leading-snug tracking-tight text-foreground">
-                Discard changes?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="mt-0.5 text-xs leading-normal text-muted-foreground">
-                You have unsaved changes. Do you want to discard them?
-              </AlertDialogDescription>
-            </div>
-          </div>
-          <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-200/90 bg-slate-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-            <AlertDialogCancel className="h-8 cursor-pointer rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs transition-colors hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
-              Keep editing
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={discardExpenseFormChanges}
-              className="h-8 cursor-pointer rounded-full border border-rose-200/90 bg-rose-50 px-3.5 text-xs font-semibold text-rose-600 shadow-2xs transition-colors hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/60 dark:text-rose-400 dark:hover:bg-rose-950/90"
-            >
-              Discard changes
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Expense details dialog */}
-      {detailsOpen && activeExpense ? (
-        <DialogShell
-          title="Expense details"
-          onClose={() => { setDetailsOpen(false); setBillPreview(null); }}
-          wide
-          preserveHeight
-        >
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <div className="grid shrink-0 gap-2 md:grid-cols-[minmax(0,1.55fr)_minmax(12rem,0.85fr)]">
-                <section className="h-20 min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-muted/20 p-2.5 sm:p-3">
-                  <p className="shrink-0 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Expense date</p>
-                  <p className="mt-1 text-base font-semibold leading-snug text-primary">{formatDate(activeExpense.expenseDate)}</p>
-                </section>
-                <section className="flex min-w-0 flex-col justify-center rounded-2xl border border-border/70 bg-muted/20 p-2.5 sm:p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Amount</p>
-                  <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-primary">{formatCurrency(activeExpense.amount)}</p>
-                </section>
-              </div>
-
-              <section className="grid min-w-0 shrink-0 grid-cols-1 items-start gap-x-3 gap-y-1 overflow-hidden rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:px-3">
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground sm:whitespace-nowrap">Category / notes</p>
-                <div className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium leading-5 text-muted-foreground">
-                  {activeExpense.categoryNotes || "—"}
-                </div>
-              </section>
-
-              <div className="grid shrink-0 gap-2 md:grid-cols-2">
-                <section className="min-w-0 rounded-2xl border border-border/70 bg-muted/20 p-2.5 sm:p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Handled By</p>
-                  <p className="mt-1.5 break-words text-sm font-semibold text-foreground">
-                    {(activeExpense.sourcingSpecialists || []).map((employee) => employee.displayName).join(", ") || "—"}
-                  </p>
-                </section>
-                <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
-                  <div className="min-w-0 rounded-xl border border-border/70 px-2.5 py-2">
-                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Updated By</p>
-                    <p className="mt-1 break-words text-[13px] font-medium text-foreground">{activeExpenseUpdatedBy}</p>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-border/70 px-2.5 py-2">
-                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Updated At</p>
-                    <p className="mt-1 whitespace-normal text-[13px] font-medium text-foreground md:whitespace-nowrap">{formatAuditDateTime(activeExpense.updatedAt ?? activeExpense.createdAt)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border/70 p-2 sm:p-2.5">
-                <div className="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-1.5">
-                  <h3 className="text-sm font-semibold text-foreground">Attached receipt</h3>
-                  {billPreview?.expenseId === activeExpense.id ? <a href={billPreview.url} download={billPreview.fileName} className="inline-flex h-8 items-center justify-center gap-2 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"><ArrowDownToLine className="size-3.5" /> Download</a> : null}
-                </div>
-                {billPreview?.expenseId === activeExpense.id ? (
-                  <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/20">
-                    {billPreview.contentType.startsWith("image/") ? <img src={billPreview.url} alt={`Receipt for expense ${activeExpense.id}`} className="absolute inset-0 m-auto h-auto w-auto max-h-full max-w-full object-contain" /> : billPreview.contentType.includes("pdf") || billPreview.fileName.toLowerCase().endsWith(".pdf") ? <iframe src={billPreview.url} title={`PDF Receipt for expense ${activeExpense.id}`} className="h-full w-full bg-white" /> : <div className="flex flex-col items-center justify-center px-4 py-8 text-center"><FileText className="size-9 text-primary" /><p className="mt-3 text-sm font-medium text-foreground">File ready to download</p><p className="mt-1 text-xs text-muted-foreground">Preview is not available for this file type.</p></div>}
-                  </div>
-                ) : !activeExpense.billFileName ? (
-                  <div className="flex min-h-24 flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-sm text-muted-foreground">No receipt attached</div>
-                ) : null}
-              </section>
-            </div>
-        </DialogShell>
-      ) : null}
-
-      {deleteTarget ? (
-        <AlertDialog
-          open={deleteDialogOpen}
-          onOpenChange={(open) => {
-            if (deleting) return;
-            setDeleteDialogOpen(open);
-            if (!open) setDeleteTarget(null);
-          }}
-        >
-          <AlertDialogContent className="z-[70] w-[calc(100vw-2rem)] max-w-[360px] gap-0 overflow-hidden rounded-2xl border border-border/80 bg-card p-0 shadow-2xl sm:w-full">
-            <div className="flex min-w-0 items-start gap-2.5 p-3 sm:p-3.5">
-              <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive">
-                <AlertCircle className="size-4.5" />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col justify-center">
-                <AlertDialogTitle className="text-sm font-semibold leading-snug tracking-tight text-foreground">
-                  Delete this expense?
-                </AlertDialogTitle>
-                <AlertDialogDescription className="mt-0.5 text-xs leading-normal text-muted-foreground">
-                  This will permanently delete the{" "}
-                  <span className="font-semibold text-foreground">{formatCurrency(deleteTarget.amount)}</span>{" "}
-                  expense from {formatDate(deleteTarget.expenseDate)}
-                  {deleteTarget.billFileName ? ", including its receipt" : ""}. This action cannot be undone.
-                </AlertDialogDescription>
-              </div>
-            </div>
-            <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-200/90 bg-slate-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-              <AlertDialogCancel
-                disabled={deleting}
-                className="h-8 cursor-pointer rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs transition-colors hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                onClick={() => void deleteExpense()}
-                disabled={deleting}
-                className="h-8 cursor-pointer rounded-full border border-rose-200/90 bg-rose-50 px-3.5 text-xs font-semibold text-rose-600 shadow-2xs transition-colors hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/60 dark:text-rose-400 dark:hover:bg-rose-950/90"
-              >
-                {deleting ? <><LoaderCircle className="mr-1 size-3 animate-spin" />Deleting…</> : "Delete expense"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      ) : null}
-
-      {/* Mobile Bill Preview overlay (opened when tapping an expense card with a bill) */}
-      {mobileBillPreviewOpen && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/70 backdrop-blur-[3px] md:hidden"
-          onClick={() => { setMobileBillPreviewOpen(false); }}
-        >
-          <div
-            className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-t border-border/80 bg-card shadow-2xl animate-in slide-in-from-bottom duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header: title, Download button, Close (X) */}
-            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5 bg-card/95">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {billPreview?.fileName || (activeExpense ? displayReceiptName(activeExpense) : "Bill preview")}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {billPreview?.url ? (
-                  <a
-                    href={billPreview.url}
-                    download={billPreview.fileName}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"
-                  >
-                    <ArrowDownToLine className="size-3.5" /> Download
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setMobileBillPreviewOpen(false)}
-                  aria-label="Close bill preview"
-                  className="flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Bill Preview body */}
-            <div className="flex-1 overflow-y-auto p-2.5">
-              {billPreview?.contentType.startsWith("image/") ? (
-                <div className="flex items-center justify-center overflow-hidden rounded-xl bg-muted/20">
-                  <img src={billPreview.url} alt="Receipt preview" className="max-h-[65dvh] w-full object-contain" />
-                </div>
-              ) : billPreview?.contentType.includes("pdf") || billPreview?.fileName.toLowerCase().endsWith(".pdf") ? (
-                <iframe src={billPreview?.url} title="PDF Receipt preview" className="h-[65dvh] w-full rounded-xl bg-white" />
-              ) : (
-                <div className="flex flex-col items-center px-3 py-8 text-center">
-                  <FileText className="size-10 text-primary" />
-                  <p className="mt-3 text-sm font-semibold text-foreground">File ready to download</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Preview not available for this format.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({
-  hasFilters,
-  onClear,
-}: {
-  hasFilters: boolean;
-  onClear: () => void;
-}) {
-  return (
-    <div className="mx-auto flex max-w-sm flex-col items-center">
-      <span className="flex size-14 items-center justify-center rounded-2xl border border-primary/10 bg-primary/[0.07] text-primary">
-        <Receipt className="size-6" />
-      </span>
-      <h3 className="mt-3 text-sm font-semibold text-foreground">
-        {hasFilters ? "No expenses found" : "Your expense list is empty"}
-      </h3>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {hasFilters ? "Try a different search or date range." : "Add your first expense and attach its receipt to get started."}
-      </p>
-      {hasFilters ? (
-        <button
-          type="button"
-          onClick={onClear}
-          className="mt-3 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
-        >
-          Clear filters
-        </button>
-      ) : null}
+      <ExpenseDialogs
+        discardDialogOpen={discardDialogOpen}
+        setDiscardDialogOpen={setDiscardDialogOpen}
+        discardExpenseFormChanges={discardExpenseFormChanges}
+        detailsOpen={detailsOpen}
+        activeExpense={activeExpense}
+        activeExpenseUpdatedBy={activeExpenseUpdatedBy}
+        closeDetails={() => { setDetailsOpen(false); setBillPreview(null); }}
+        billPreview={billPreview}
+        setBillPreview={setBillPreview}
+        deleteTarget={deleteTarget}
+        deleteDialogOpen={deleteDialogOpen}
+        setDeleteDialogOpen={setDeleteDialogOpen}
+        setDeleteTarget={setDeleteTarget}
+        deleting={deleting}
+        deleteExpense={deleteExpense}
+        mobileBillPreviewOpen={mobileBillPreviewOpen}
+        setMobileBillPreviewOpen={setMobileBillPreviewOpen}
+        displayReceiptName={displayReceiptName}
+        formatDate={formatDate}
+        formatCurrency={formatCurrency}
+        formatAuditDateTime={formatAuditDateTime}
+      />
     </div>
   );
 }
