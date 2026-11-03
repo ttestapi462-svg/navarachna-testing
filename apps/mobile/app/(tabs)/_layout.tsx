@@ -16,13 +16,24 @@ export default function TabLayout() {
     more: "/(tabs)/more",
   };
 
+  const handleTabSelect = (routeName: MobileTabRoute) => {
+    if (routeName === "customer") {
+      router.navigate({
+        pathname: "/(tabs)/customer",
+        params: { resetNav: Date.now().toString() },
+      });
+    } else {
+      router.navigate(tabHrefs[routeName]);
+    }
+  };
+
   return (
     <Tabs
       tabBar={({ insets }) => (
         <LegacyCurvedBottomNavBar
           activeRoute={pathname}
           safeAreaBottom={insets.bottom}
-          onTabSelect={(routeName) => router.navigate(tabHrefs[routeName])}
+          onTabSelect={handleTabSelect}
         />
       )}
       screenOptions={{

@@ -16,41 +16,45 @@ export class MobileApiError extends Error {
 }
 
 export function getApiBaseUrl(): string {
-  // Environment variables are inlined when Metro starts and may be stale after
-  // switching Wi-Fi or hotspot networks. In development, use Expo's runtime LAN
-  // host when available; an Expo tunnel host is not the backend host.
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (process.env.NODE_ENV === "development") {
-    if (hostUri) {
-      try {
-        const host = new URL(hostUri.includes("://") ? hostUri : `http://${hostUri}`).hostname;
-        const isPrivateIpv4 =
-          /^10\./.test(host) ||
-          /^192\.168\./.test(host) ||
-          /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-        if (isPrivateIpv4) return `http://${host}:5207`;
-      } catch {
-        // Use the current local development address below if hostUri is not an IP.
-      }
-    }
-    return "http://192.168.29.16:5207";
+  // 1. If running on Web in the browser, always connect to the API on the current browser's hostname (e.g. localhost:5207)
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname || "localhost";
+    return `http://${hostname}:5207`;
   }
 
+  // 2. Explicit environment variable
   const environmentApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (environmentApiUrl) {
     return environmentApiUrl.replace(/\/$/, "");
   }
+
+  // 3. Expo config extra
   if (Constants.expoConfig?.extra?.apiUrl) {
-    return Constants.expoConfig.extra.apiUrl as string;
+    return (Constants.expoConfig.extra.apiUrl as string).replace(/\/$/, "");
   }
+
+  // 4. Runtime LAN host from Expo hostUri (for physical Android/iOS devices running Expo Go / dev build)
+  const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     try {
       const host = new URL(hostUri.includes("://") ? hostUri : `http://${hostUri}`).hostname;
-      return `http://${host}:5207`;
+      const isPrivateIpv4 =
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        host === "localhost" ||
+        host === "127.0.0.1";
+      if (isPrivateIpv4) return `http://${host}:5207`;
     } catch {
-      // Use localhost only when no usable Expo host is available.
+      // Use fallback below
     }
   }
+
+  // 5. Development fallback: use current Wi-Fi LAN IP (192.168.29.47) for physical mobile devices
+  if (process.env.NODE_ENV === "development") {
+    return "http://192.168.29.47:5207";
+  }
+
   return "http://localhost:5207";
 }
 

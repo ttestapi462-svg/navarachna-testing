@@ -1,21 +1,33 @@
 import * as React from "react";
-import { View, Image, StyleSheet, StyleProp, ViewStyle } from "react-native";
+import { View, Image, StyleSheet, StyleProp, ViewStyle, Platform, ImageStyle } from "react-native";
 
 interface StudioLogoIconProps {
   size?: number;
   style?: StyleProp<ViewStyle>;
+  imageStyle?: StyleProp<ImageStyle>;
 }
 
 /**
  * Authentic Navarachna Designer Studio Monogram Emblem:
  * Authentic 3D embossed antique gold needle & thread monogram.
+ * Rendered crystal-clear with luxury Atelier drop shadow matching the web application.
  */
-export function StudioLogoIcon({ size = 36, style }: StudioLogoIconProps) {
+export function StudioLogoIcon({ size = 36, style, imageStyle }: StudioLogoIconProps) {
   return (
-    <View style={[{ width: size, height: size, alignItems: "center", justifyContent: "center" }, style]}>
+    <View
+      style={[
+        styles.logoIconContainer,
+        { width: size, height: size },
+        style,
+      ]}
+    >
       <Image
         source={require("../../assets/navarachna-monogram-gold.png")}
-        style={{ width: size, height: size }}
+        style={[
+          styles.logoImage,
+          { width: size, height: size },
+          imageStyle,
+        ]}
         resizeMode="contain"
       />
     </View>
@@ -81,10 +93,10 @@ export function StudioBrandMark({
   if (variant === "stacked" || variant === "full") {
     const width = Math.round(height * 1.51);
     return (
-      <View style={[{ alignItems: "center", justifyContent: "center" }, style]}>
+      <View style={[styles.brandMarkContainer, style]}>
         <Image
           source={require("../../assets/navarachna-full-crest-gold.png")}
-          style={{ width, height }}
+          style={[styles.brandMarkImage, { width, height }]}
           resizeMode="contain"
         />
       </View>
@@ -95,10 +107,10 @@ export function StudioBrandMark({
   if (variant === "textOnly") {
     const width = Math.round(height * 3.92);
     return (
-      <View style={[{ alignItems: "center", justifyContent: "center" }, style]}>
+      <View style={[styles.brandMarkContainer, style]}>
         <Image
           source={require("../../assets/navarachna-wordmark-gold.png")}
-          style={{ width, height }}
+          style={[styles.brandMarkImage, { width, height }]}
           resizeMode="contain"
         />
       </View>
@@ -108,10 +120,10 @@ export function StudioBrandMark({
   // 3. Horizontal Lockup (Default) - aspect ratio ~ 4.43 : 1
   const width = Math.round(height * 4.43);
   return (
-    <View style={[{ alignItems: "center", justifyContent: "center" }, style]}>
+    <View style={[styles.brandMarkContainer, style]}>
       <Image
         source={require("../../assets/navarachna-horizontal-lockup.png")}
-        style={{ width, height }}
+        style={[styles.brandMarkImage, { width, height }]}
         resizeMode="contain"
       />
     </View>
@@ -119,6 +131,48 @@ export function StudioBrandMark({
 }
 
 const styles = StyleSheet.create({
+  logoIconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  logoImage: {
+    backgroundColor: "transparent",
+    ...Platform.select({
+      web: {
+        imageRendering: "-webkit-optimize-contrast",
+      } as any,
+      default: {},
+    }),
+  },
+  brandMarkContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#4A0D1B",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        filter: "drop-shadow(0px 4px 16px rgba(74, 13, 27, 0.18))",
+      },
+      default: {
+        shadowColor: "#4A0D1B",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  brandMarkImage: {
+    backgroundColor: "transparent",
+  },
   appIconContainer: {
     backgroundColor: "#ffffff",
     borderWidth: 1,

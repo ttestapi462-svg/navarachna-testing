@@ -22,6 +22,8 @@ using Navarachna.Api.Features.Auth;
 
 using Navarachna.Api.Features.Expenses;
 
+using Navarachna.Api.Features.Customers.Services;
+
 using Navarachna.Api.Hubs;
 
 using EmployeeApi.Services;
@@ -51,6 +53,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<DocumentService>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 
 if (string.Equals(builder.Configuration["Storage:Provider"], "Blob", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
@@ -538,4 +541,5 @@ using (var scope = app.Services.CreateScope())
 app.MapGet("/routes", (EndpointDataSource eds) =>
     string.Join("\n", eds.Endpoints.OfType<RouteEndpoint>().Select(e => e.RoutePattern.RawText)));
 app.Run();
+
 

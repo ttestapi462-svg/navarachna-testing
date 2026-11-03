@@ -55,7 +55,7 @@ export function EmployeeDeleteDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
-        className="w-[calc(100vw-2rem)] sm:w-full max-w-[360px] p-0 gap-0 rounded-2xl shadow-2xl border border-border/80 bg-card overflow-hidden z-[70]"
+        className="w-[calc(100vw-2rem)] sm:w-full max-w-[360px] p-0 gap-0 rounded-2xl shadow-2xl border border-border/80 bg-card overflow-hidden z-50"
       >
         {/* Compact Content Body */}
         <div className="flex items-start gap-3 p-4 sm:p-4.5 min-w-0">

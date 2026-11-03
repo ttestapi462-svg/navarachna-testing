@@ -30,3 +30,9 @@ obj/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Backup & temporary files
+*.bak
+*.bak.*
+*.tmp
+
