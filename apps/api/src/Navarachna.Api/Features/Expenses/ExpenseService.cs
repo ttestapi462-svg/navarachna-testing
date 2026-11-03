@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Navarachna.Api.Data;
 using Navarachna.Api.Entities;
@@ -119,9 +120,42 @@ public class ExpenseService(
 
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
-            var term = q.Search.Trim().ToLower();
-            query = query.Where(
-                e => e.CategoryNotes.ToLower().Contains(term));
+            var term = q.Search.Trim().ToLowerInvariant();
+            var matchingSpecialistIds = await db.Employees.AsNoTracking()
+                .Where(employee =>
+                    employee.FirstName.ToLower().Contains(term) ||
+                    (employee.LastName ?? string.Empty).ToLower().Contains(term) ||
+                    (employee.FirstName + " " + (employee.LastName ?? string.Empty)).ToLower().Contains(term))
+                .Select(employee => employee.Id)
+                .ToListAsync(ct);
+            var matchingUserIds = await db.Users.AsNoTracking()
+                .Where(user =>
+                    user.Username.ToLower().Contains(term) ||
+                    user.FirstName.ToLower().Contains(term) ||
+                    (user.LastName ?? string.Empty).ToLower().Contains(term) ||
+                    (user.FirstName + " " + (user.LastName ?? string.Empty)).ToLower().Contains(term))
+                .Select(user => user.Id)
+                .ToListAsync(ct);
+
+            var amountSearch = term.Replace("₹", string.Empty).Replace(",", string.Empty).Trim();
+            var hasAmountSearch = decimal.TryParse(amountSearch, NumberStyles.Number, CultureInfo.InvariantCulture, out var amountValue);
+            var hasDateSearch = DateOnly.TryParse(q.Search.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateValue);
+            var hasYearSearch = int.TryParse(term, out var yearValue) && yearValue is >= 1000 and <= 9999;
+            var hasMonthSearch = DateTime.TryParseExact(term, ["MMM", "MMMM"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var monthValue);
+            var isReceiptAlias = term is "receipt" or "image";
+
+            query = query.Where(e =>
+                e.CategoryNotes.ToLower().Contains(term) ||
+                (e.BillFileName ?? string.Empty).ToLower().Contains(term) ||
+                (isReceiptAlias && e.BillFileName != string.Empty) ||
+                (matchingSpecialistIds.Count > 0 && e.SourcingSpecialistIds.Any(id => matchingSpecialistIds.Contains(id))) ||
+                (matchingUserIds.Count > 0 && ((e.CreatedBy.HasValue && matchingUserIds.Contains(e.CreatedBy.Value)) || (e.UpdatedBy.HasValue && matchingUserIds.Contains(e.UpdatedBy.Value)))) ||
+                (hasAmountSearch && e.Amount == amountValue) ||
+                (hasDateSearch && e.ExpenseDate == dateValue) ||
+                (hasDateSearch && e.CreatedAt.Date == dateValue.ToDateTime(TimeOnly.MinValue).Date) ||
+                (hasDateSearch && e.UpdatedAt.HasValue && e.UpdatedAt.Value.Date == dateValue.ToDateTime(TimeOnly.MinValue).Date) ||
+                (hasYearSearch && (e.ExpenseDate.Year == yearValue || e.CreatedAt.Year == yearValue || (e.UpdatedAt.HasValue && e.UpdatedAt.Value.Year == yearValue))) ||
+                (hasMonthSearch && (e.ExpenseDate.Month == monthValue.Month || e.CreatedAt.Month == monthValue.Month || (e.UpdatedAt.HasValue && e.UpdatedAt.Value.Month == monthValue.Month))));
         }
 
         var total = await query.CountAsync(ct);

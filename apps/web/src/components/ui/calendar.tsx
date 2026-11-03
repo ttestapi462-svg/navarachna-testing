@@ -19,9 +19,11 @@ function Calendar({
   buttonVariant = "ghost",
   formatters,
   components,
+  rangeBand = false,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
+  rangeBand?: boolean
 }) {
   const defaultClassNames = getDefaultClassNames()
 
@@ -101,11 +103,14 @@ function Calendar({
           defaultClassNames.day
         ),
         range_start: cn(
-          "bg-accent rounded-l-md",
+          rangeBand ? "bg-accent rounded-s-md" : "bg-accent rounded-l-md",
           defaultClassNames.range_start
         ),
-        range_middle: cn("rounded-none", defaultClassNames.range_middle),
-        range_end: cn("bg-accent rounded-r-md", defaultClassNames.range_end),
+        range_middle: cn(rangeBand ? "bg-accent rounded-none" : "rounded-none", defaultClassNames.range_middle),
+        range_end: cn(rangeBand ? "bg-accent rounded-e-md" : "bg-accent rounded-r-md", defaultClassNames.range_end),
+        day_button: rangeBand
+          ? "data-[range-middle=true]:!bg-transparent data-[range-middle=true]:text-accent-foreground data-[range-middle=true]:shadow-none"
+          : undefined,
         today: cn(
           "font-semibold text-primary",
           defaultClassNames.today
