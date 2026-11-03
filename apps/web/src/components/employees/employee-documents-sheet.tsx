@@ -521,7 +521,7 @@ export function EmployeeDocumentsSheet({
       >
         <DialogContent
           showCloseButton={false}
-          className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-2xl p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-[70] overflow-hidden"
+          className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-2xl p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-50 overflow-hidden"
         >
           {previewDoc && (
             <>
@@ -654,7 +654,7 @@ export function EmployeeDocumentsSheet({
         }}
       >
         <AlertDialogContent
-          className="w-[calc(100vw-2rem)] sm:w-full max-w-[360px] p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-[70] overflow-hidden"
+          className="w-[calc(100vw-2rem)] sm:w-full max-w-[360px] p-0 gap-0 rounded-2xl border border-border/80 bg-card shadow-2xl z-50 overflow-hidden"
         >
           {/* Compact Content Body */}
           <div className="p-4 sm:p-4.5 pb-3 sm:pb-3.5 min-w-0">

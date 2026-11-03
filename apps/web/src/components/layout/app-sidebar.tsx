@@ -36,6 +36,7 @@ import {
   Layers,
   LayoutDashboard,
   Users,
+  Contact,
   ChevronRight,
   PanelLeft,
   type LucideIcon,
@@ -62,6 +63,11 @@ const navigationStructure: NavItem[] = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Customer Management",
+    url: "/customers",
+    icon: Contact,
   },
   {
     title: "Employee List",
@@ -421,3 +427,8 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
+
+
+
+

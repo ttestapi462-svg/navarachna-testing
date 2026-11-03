@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
   [
@@ -24,13 +24,13 @@ const badgeVariants = cva(
         "primary-light":
           "border-primary/10 bg-primary/10 text-primary dark:border-primary/25 dark:bg-primary/15 dark:text-primary",
         "warning-light":
-          "border-warning/15 bg-warning/10 text-warning-foreground dark:border-warning/25 dark:bg-warning/15 dark:text-warning",
+          "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-400",
         "success-light":
-          "border-success/15 bg-success/10 text-success-foreground dark:border-success/25 dark:bg-success/15 dark:text-success",
+          "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-400",
         "info-light":
-          "border-info/15 bg-info/10 text-info-foreground dark:border-info/25 dark:bg-info/15 dark:text-info",
+          "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-400",
         "destructive-light":
-          "border-destructive/15 bg-destructive/10 text-destructive-foreground dark:border-destructive/25 dark:bg-destructive/15 dark:text-destructive",
+          "border-destructive/20 bg-destructive/10 text-destructive dark:border-destructive/30 dark:bg-destructive/15 dark:text-destructive",
         "invert-light":
           "border-invert/15 bg-invert/10 text-foreground dark:border-invert/45 dark:bg-invert/35 dark:text-invert-foreground",
         "focus-light":
@@ -38,13 +38,13 @@ const badgeVariants = cva(
         "primary-outline":
           "bg-background border-border text-primary dark:bg-input/30",
         "warning-outline":
-          "bg-background border-border text-warning-foreground dark:bg-input/30",
+          "bg-background border-amber-500/30 text-amber-700 dark:text-amber-400 dark:bg-input/30",
         "success-outline":
-          "bg-background border-border text-success-foreground dark:bg-input/30",
+          "bg-background border-emerald-500/30 text-emerald-700 dark:text-emerald-400 dark:bg-input/30",
         "info-outline":
-          "bg-background border-border text-info-foreground dark:bg-input/30",
+          "bg-background border-sky-500/30 text-sky-700 dark:text-sky-400 dark:bg-input/30",
         "destructive-outline":
-          "bg-background border-border text-destructive-foreground dark:bg-input/30",
+          "bg-background border-destructive/30 text-destructive dark:bg-input/30",
         "invert-outline":
           "bg-background border-border text-invert-foreground dark:bg-input/30",
         "focus-outline":

@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Users, type LucideIcon } from "lucide-react";
+import { Contact, LayoutDashboard, Receipt, Users, type LucideIcon } from "lucide-react";
 
 interface HeaderConfig {
   title: string;
@@ -11,10 +11,22 @@ interface HeaderConfig {
 }
 
 function getHeaderConfig(pathname: string): HeaderConfig {
+  if (pathname.startsWith("/customers")) {
+    return {
+      title: "Customer Management",
+      icon: Contact,
+    };
+  }
   if (pathname.startsWith("/employees")) {
     return {
       title: "Employee List",
       icon: Users,
+    };
+  }
+  if (pathname.startsWith("/expenses")) {
+    return {
+      title: "Expenses",
+      icon: Receipt,
     };
   }
   return {

@@ -10,7 +10,7 @@ import { StudioLogoIcon } from "../brand/StudioLogo";
 
 export interface AtelierHeaderProps {
   title?: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   icon?: React.ReactNode;
   showBack?: boolean;
   onBack?: () => void;
@@ -28,6 +28,7 @@ export interface AtelierHeaderProps {
   backgroundColor?: string;
   brandMarkStyle?: StyleProp<ViewStyle>;
   brandTitleStyle?: StyleProp<TextStyle>;
+  brandSubtitleStyle?: StyleProp<TextStyle>;
   barStyle?: StyleProp<ViewStyle>;
   brandContainerStyle?: StyleProp<ViewStyle>;
   preserveTitleSize?: boolean;
@@ -52,6 +53,7 @@ export function AtelierHeader({
   backgroundColor,
   brandMarkStyle,
   brandTitleStyle,
+  brandSubtitleStyle,
   barStyle,
   brandContainerStyle,
   preserveTitleSize = false,
@@ -92,11 +94,21 @@ export function AtelierHeader({
             /* Left-Aligned Layout (e.g. for custom action bar or legacy flex) */
             <>
               <View style={[styles.leftBrandContainer, brandContainerStyle]}>
-                {icon ? (
+                {leftItem ? (
+                  leftItem
+                ) : showBack ? (
+                  <TouchableOpacity
+                    onPress={onBack || (() => (router.canGoBack() ? router.back() : router.replace("/(tabs)")))}
+                    style={styles.headerIconBtn}
+                    activeOpacity={0.7}
+                  >
+                    <ArrowLeft size={22} color="#1E293B" />
+                  </TouchableOpacity>
+                ) : icon ? (
                   <View style={[styles.leftIconWrapper, brandMarkStyle]}>{icon}</View>
                 ) : (
                   <View style={[styles.headerBrandBadge, brandMarkStyle]}>
-                    <StudioLogoIcon size={26} />
+                    <StudioLogoIcon size={34} />
                   </View>
                 )}
                 <View style={styles.titleColumn}>
@@ -108,8 +120,13 @@ export function AtelierHeader({
                   >
                     {title}
                   </Text>
-                  {subtitle ? (
-                    <Text style={styles.headerSubtitle} numberOfLines={1}>
+                  {React.isValidElement(subtitle) ? (
+                    subtitle
+                  ) : subtitle ? (
+                    <Text
+                      style={[styles.headerSubtitle, brandSubtitleStyle]}
+                      numberOfLines={1}
+                    >
                       {subtitle}
                     </Text>
                   ) : null}
@@ -154,7 +171,7 @@ export function AtelierHeader({
                 </TouchableOpacity>
               ) : (
                 <View style={styles.headerBrandBadge}>
-                  <StudioLogoIcon size={26} />
+                  <StudioLogoIcon size={34} />
                 </View>
               )}
 
@@ -171,8 +188,13 @@ export function AtelierHeader({
                     {title}
                   </Text>
                 </View>
-                {subtitle ? (
-                  <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {React.isValidElement(subtitle) ? (
+                  subtitle
+                ) : subtitle ? (
+                  <Text
+                    style={[styles.headerSubtitle, brandSubtitleStyle]}
+                    numberOfLines={1}
+                  >
                     {subtitle}
                   </Text>
                 ) : null}
@@ -224,7 +246,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     position: "relative",
-    height: 44,
+    minHeight: 44,
   },
   headerIconBtn: {
     padding: 6,
@@ -233,25 +255,11 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   headerBrandBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "rgba(120, 7, 13, 0.12)",
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#78070D",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
-      },
-      default: {
-        elevation: 1,
-      },
-    }),
+    backgroundColor: "transparent",
   },
   centerTitleWrapper: {
     position: "absolute",
@@ -273,7 +281,7 @@ const styles = StyleSheet.create({
   },
   richScreenTitle: {
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#78070D",
     letterSpacing: -0.5,
     lineHeight: 28,
@@ -282,6 +290,9 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
         textAlignVertical: "center",
       },
+      web: {
+        fontWeight: "800",
+      } as any,
     }),
   },
   headerSubtitle: {
@@ -344,8 +355,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     minWidth: 0,
+    marginRight: 8,
   },
   leftIconWrapper: {
     alignItems: "center",
