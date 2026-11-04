@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 import { useForm, Controller, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -17,6 +17,15 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Field,
   FieldLabel,
@@ -131,24 +140,98 @@ export function EmployeeFormSheet({
   onOpenChange,
   employee,
 }: EmployeeFormDialogProps) {
+  const [formDirty, setFormDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFormDirty(false);
+      setSaving(false);
+      setDiscardConfirmationOpen(false);
+    }
+  }, [open]);
+
+  const requestClose = () => {
+    if (saving) return;
+    if (formDirty) {
+      setDiscardConfirmationOpen(true);
+      return;
+    }
+    onOpenChange(false);
+  };
+
+  const discardChanges = () => {
+    setDiscardConfirmationOpen(false);
+    setFormDirty(false);
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open && (
-        <EmployeeFormDialogContent
-          employee={employee}
-          onOpenChange={onOpenChange}
-        />
-      )}
-    </Dialog>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) onOpenChange(true);
+          else requestClose();
+        }}
+      >
+        {open && (
+          <EmployeeFormDialogContent
+            employee={employee}
+            onOpenChange={onOpenChange}
+            onRequestClose={requestClose}
+            onDirtyChange={setFormDirty}
+            onSavingChange={setSaving}
+          />
+        )}
+      </Dialog>
+
+      <AlertDialog open={discardConfirmationOpen} onOpenChange={setDiscardConfirmationOpen}>
+        <AlertDialogContent className="z-[80] w-[calc(100vw-2rem)] max-w-[360px] gap-0 overflow-hidden rounded-2xl border border-border/80 bg-card p-0 shadow-2xl sm:w-full">
+          <div className="flex min-w-0 items-start gap-2.5 p-3 sm:p-3.5">
+            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive">
+              <AlertCircle className="size-4.5" />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
+              <AlertDialogTitle className="text-sm font-semibold leading-snug tracking-tight text-foreground">
+                Discard changes?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="mt-0.5 text-xs leading-normal text-muted-foreground">
+                You have unsaved changes. Do you want to discard them?
+              </AlertDialogDescription>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-200/90 bg-slate-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <AlertDialogCancel className="h-8 cursor-pointer rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs transition-colors hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={discardChanges}
+              className="h-8 cursor-pointer rounded-full border border-rose-200/90 bg-rose-50 px-3.5 text-xs font-semibold text-rose-600 shadow-2xs transition-colors hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/60 dark:text-rose-400 dark:hover:bg-rose-950/90"
+            >
+              Discard changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
 function EmployeeFormDialogContent({
   employee,
   onOpenChange,
+  onRequestClose,
+  onDirtyChange,
+  onSavingChange,
 }: {
   employee?: EmployeeResponse | null;
   onOpenChange: (open: boolean) => void;
+  onRequestClose: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+  onSavingChange: (saving: boolean) => void;
 }) {
   const isEdit = Boolean(employee);
   const [conflictError, setConflictError] = useState<string | null>(null);
@@ -162,7 +245,7 @@ function EmployeeFormDialogContent({
     control,
     setValue,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<z.input<typeof employeeSchema>, unknown, EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     mode: "onTouched",
@@ -205,6 +288,10 @@ function EmployeeFormDialogContent({
         },
   });
 
+  useEffect(() => {
+    onDirtyChange(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   const credentialsEnabled = watch("credentialsEnabled") ?? false;
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -232,6 +319,7 @@ function EmployeeFormDialogContent({
 
   const onSubmit = async (data: EmployeeFormData) => {
     setConflictError(null);
+    onSavingChange(true);
     try {
       if (isEdit && employee) {
         // Send the login change only when actually modified — the stored-password
@@ -287,6 +375,7 @@ function EmployeeFormDialogContent({
           description: `${data.firstName} ${data.lastName || ""} was added as ${data.department}${data.credentialsEnabled ? " with login credentials created" : ""}.`,
         });
       }
+      onDirtyChange(false);
       onOpenChange(false);
     } catch (err: unknown) {
       const isConflict =
@@ -305,6 +394,8 @@ function EmployeeFormDialogContent({
           description: msg,
         });
       }
+    } finally {
+      onSavingChange(false);
     }
   };
 
@@ -1202,7 +1293,7 @@ function EmployeeFormDialogContent({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={onRequestClose}
             disabled={isPending}
             className="text-xs h-8 px-3 border-destructive/60 text-destructive hover:bg-destructive/10 hover:border-destructive hover:text-destructive cursor-pointer transition-colors inline-flex items-center gap-1.5"
           >
