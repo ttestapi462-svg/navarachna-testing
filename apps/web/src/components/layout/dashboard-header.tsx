@@ -25,7 +25,7 @@ function getHeaderConfig(pathname: string): HeaderConfig {
   }
   if (pathname.startsWith("/expenses")) {
     return {
-      title: "Expenses",
+      title: "Expense management",
       icon: Receipt,
     };
   }

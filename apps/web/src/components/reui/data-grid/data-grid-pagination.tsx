@@ -25,6 +25,8 @@ interface DataGridPaginationProps {
   sizesDescription?: string
   sizesSkeleton?: ReactNode
   more?: boolean
+  /** Keep the page controls visible when the table has only one page. */
+  showSinglePageControls?: boolean
   /** Page buttons the truncated middle shows; the row adds first, last and
    *  an ellipsis for each hidden stretch. Clamped to a minimum of 3. */
   moreLimit?: number
@@ -144,6 +146,7 @@ function DataGridPagination(props: DataGridPaginationProps): JSX.Element {
     previousPageLabel: i18n.labels.previousPage,
     nextPageLabel: i18n.labels.nextPage,
     ellipsisText: i18n.labels.paginationEllipsis,
+    showSinglePageControls: false,
   }
 
   const mergedProps: DataGridPaginationProps = { ...defaultProps, ...props }
@@ -225,11 +228,21 @@ function DataGridPagination(props: DataGridPaginationProps): JSX.Element {
           mergedProps.infoSkeleton
         ) : (
           <>
-            <div className="text-muted-foreground order-2 text-sm text-nowrap sm:order-1">
+            <div
+              className={cn(
+                "text-muted-foreground text-sm text-nowrap",
+                mergedProps.showSinglePageControls ? "order-1" : "order-2 sm:order-1"
+              )}
+            >
               {paginationInfo}
             </div>
-            {pageCount > 1 && (
-              <div className="order-1 flex flex-wrap items-center justify-center gap-1 sm:flex-nowrap">
+            {(pageCount > 1 || mergedProps.showSinglePageControls) && (
+              <div
+                className={cn(
+                  "flex flex-wrap items-center justify-center gap-1 sm:flex-nowrap",
+                  mergedProps.showSinglePageControls ? "order-2" : "order-1"
+                )}
+              >
                 <Button
                   size="icon-sm"
                   variant="ghost"

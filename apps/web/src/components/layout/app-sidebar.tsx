@@ -39,6 +39,7 @@ import {
   Contact,
   ChevronRight,
   PanelLeft,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 
@@ -73,6 +74,11 @@ const navigationStructure: NavItem[] = [
     title: "Employee List",
     url: "/employees",
     icon: Users,
+  },
+  {
+    title: "Expense Management",
+    url: "/expenses",
+    icon: Receipt,
   },
 ];
 
