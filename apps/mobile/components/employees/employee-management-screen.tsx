@@ -39,8 +39,9 @@ const SURFACE = "#FFFFFF";
 const BORDER = "#E8E2D8";
 const TEXT = "#231E1C";
 const MUTED = "#6E6862";
-const SUCCESS = "#059669";
 const PAGE_SIZE = 15;
+const ROW_HEIGHT = 62;
+const ROW_BORDER = "#E3DCD1";
 
 type EmployeeConfirmation = {
   kind: "delete" | "removeLogin" | "deleteDocument";
@@ -50,12 +51,6 @@ type EmployeeConfirmation = {
 
 function employeeName(employee: EmployeeRecord) {
   return `${employee.firstName} ${employee.lastName || ""}`.trim();
-}
-
-function employeeInitials(employee: EmployeeRecord) {
-  const first = (employee.firstName || "").trim().charAt(0);
-  const last = (employee.lastName || "").trim().charAt(0);
-  return `${first}${last}`.toUpperCase() || "?";
 }
 
 function departmentTone(department: string) {
@@ -98,11 +93,7 @@ export default function EmployeeManagementScreen() {
   const [profileEmployee, setProfileEmployee] = useState<EmployeeRecord | null>(null);
   const [confirmation, setConfirmation] = useState<EmployeeConfirmation | null>(null);
   const [confirmingAction, setConfirmingAction] = useState(false);
-  const [listViewportHeight, setListViewportHeight] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const employeeCardHeight = listViewportHeight
-    ? Math.max(64, (listViewportHeight - getTabBarContentPadding(insets.bottom) - 2 - 5 * 7) / 6)
-    : 80;
 
   const loadEmployees = useCallback(async (requestedPage: number, initial = false) => {
     try {
@@ -306,54 +297,48 @@ export default function EmployeeManagementScreen() {
         style={styles.employeeList}
         data={pageLoading ? [] : employees}
         keyExtractor={(employee) => String(employee.id)}
-        onLayout={(event) => {
-          const measuredHeight = event.nativeEvent.layout.height;
-          // Keep the last valid list measurement while filter loading briefly
-          // collapses the FlatList; tiny measurements would collapse every row.
-          if (measuredHeight >= 250) setListViewportHeight(measuredHeight);
-        }}
         contentContainerStyle={[styles.listContent, { paddingBottom: getTabBarContentPadding(insets.bottom) }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={PRIMARY} colors={[PRIMARY]} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderItem={({ item: employee }) => {
+        renderItem={({ item: employee, index }) => {
           const name = employeeName(employee);
           const roleTone = departmentTone(employee.department);
+          const isFirst = index === 0;
+          const isLast = index === employees.length - 1;
           return (
-            <View style={[styles.employeeCard, { height: employeeCardHeight }]}>
-              {/* Staff-badge panel: department-tinted, initials avatar with live status dot */}
-              <TouchableOpacity
-                style={[styles.badgePanel, { backgroundColor: roleTone.background, borderRightColor: roleTone.border }]}
-                onPress={() => setProfileEmployee(employee)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${name}'s profile`}
-              >
-                <View style={[styles.initialsAvatar, { borderColor: roleTone.border }, !employee.isActive && styles.initialsAvatarInactive]}>
-                  <Text style={[styles.initialsText, { color: roleTone.foreground }]}>{employeeInitials(employee)}</Text>
-                  <View style={[styles.avatarStatusDot, employee.isActive ? styles.statusDotActive : styles.statusDotInactive]} />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.employeeInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile`}>
+            <View style={[styles.row, isFirst && styles.rowFirst, isLast ? styles.rowLast : styles.rowDivider]}>
+              <View style={[styles.deptBar, { backgroundColor: employee.isActive ? roleTone.foreground : "#CFC8BE" }]} />
+              <TouchableOpacity style={styles.rowInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile`}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.employeeName} numberOfLines={1}>{name}</Text>
+                  <Text style={[styles.employeeName, !employee.isActive && styles.employeeNameInactive]} numberOfLines={1}>{name}</Text>
                   {!employee.isActive ? <Text style={styles.inactiveTag}>INACTIVE</Text> : null}
                 </View>
-                <Text style={[styles.roleLabel, { color: roleTone.foreground }]} numberOfLines={1}>{employee.department}</Text>
-                <View style={styles.mobileRow}>
-                  <Phone size={10.5} color="#8C827A" />
+                <View style={styles.subRow}>
+                  <Text style={[styles.deptText, { color: employee.isActive ? roleTone.foreground : MUTED }]} numberOfLines={1}>{employee.department}</Text>
+                  <Text style={styles.subSeparator}>{"\u00B7"}</Text>
                   <Text style={styles.mobileMeta} numberOfLines={1}>{employee.mobile}</Text>
                 </View>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.callButton} onPress={() => callEmployee(employee.mobile)} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }} accessibilityRole="button" accessibilityLabel={`Call ${name}`}>
-                <Phone size={16} color="#FFFFFF" strokeWidth={2.2} />
+                <Phone size={15} color="#FFFFFF" strokeWidth={2.3} />
               </TouchableOpacity>
             </View>
           );
         }}
-        ListHeaderComponent={pageLoading ? <View style={styles.skeletonList}>{Array.from({ length: 6 }).map((_, index) => <View key={index} style={[styles.skeletonCard, { height: employeeCardHeight }]} />)}</View> : undefined}
+        ListHeaderComponent={pageLoading ? (
+          <View style={styles.skeletonSheet}>
+            {Array.from({ length: 8 }).map((_, index) => (
+              <View key={index} style={[styles.skeletonRow, index < 7 && styles.rowDivider]}>
+                <View style={styles.skeletonBar} />
+                <View style={styles.skeletonLines}><View style={styles.skeletonLineLong} /><View style={styles.skeletonLineShort} /></View>
+                <View style={styles.skeletonButton} />
+              </View>
+            ))}
+          </View>
+        ) : employees.length > 0 ? (
+          <Text style={styles.listCaption}>{totalCount} TEAM {totalCount === 1 ? "MEMBER" : "MEMBERS"}</Text>
+        ) : undefined}
         ListEmptyComponent={!pageLoading ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>{loadFailed ? <AlertCircle size={23} color="#DC2626" /> : <Users size={23} color={PRIMARY} />}</View>
@@ -445,80 +430,54 @@ const styles = StyleSheet.create({
   filterChipText: { color: MUTED, fontSize: 11.5, fontWeight: "600" },
   filterChipTextActive: { color: PRIMARY, fontWeight: "700" },
   employeeList: { flex: 1, minHeight: 0 },
-  listContent: { paddingHorizontal: 16, paddingTop: 2, gap: 7 },
-  // Staff-badge card: tinted initials panel on the left + solid call button on the right.
-  employeeCard: {
+  listContent: { paddingHorizontal: 16, paddingTop: 2 },
+  // Compact directory: one grouped sheet, hairline-divided rows, department colour bar.
+  listCaption: { color: MUTED, fontSize: 10.5, fontWeight: "800", letterSpacing: 0.9, marginLeft: 4, marginBottom: 8, marginTop: 2 },
+  row: {
+    height: ROW_HEIGHT,
     flexDirection: "row",
-    alignItems: "stretch",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#DED7CE",
-    backgroundColor: SURFACE,
-    overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.07,
-        shadowRadius: 5,
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "0 3px 8px rgba(35,30,28,0.08)" },
-    }),
-  },
-  badgePanel: {
-    width: 64,
     alignItems: "center",
-    justifyContent: "center",
+    gap: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    backgroundColor: SURFACE,
+    borderLeftWidth: 1,
     borderRightWidth: 1,
+    borderColor: ROW_BORDER,
   },
-  initialsAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    borderWidth: 1,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  initialsAvatarInactive: { opacity: 0.55 },
-  initialsText: { fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
-  avatarStatusDot: {
-    position: "absolute",
-    right: -3,
-    bottom: -3,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: SURFACE,
-  },
-  employeeInfo: { flex: 1, minWidth: 0, justifyContent: "center", paddingLeft: 12, paddingRight: 8, gap: 2 },
+  rowFirst: { borderTopWidth: 1, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
+  rowLast: { borderBottomWidth: 1, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#ECE6DC" },
+  deptBar: { width: 4, height: 34, borderRadius: 2 },
+  rowInfo: { flex: 1, minWidth: 0, justifyContent: "center", gap: 3 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  employeeName: { flexShrink: 1, color: TEXT, fontSize: 15, fontWeight: "700" },
-  inactiveTag: { color: "#B42318", fontSize: 8.5, fontWeight: "800", letterSpacing: 0.6 },
-  statusDotActive: { backgroundColor: SUCCESS },
-  statusDotInactive: { backgroundColor: "#DC2626" },
-  roleLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
-  mobileRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  mobileMeta: { flexShrink: 1, color: MUTED, fontSize: 11.5, fontVariant: ["tabular-nums"] },
+  employeeName: { flexShrink: 1, color: TEXT, fontSize: 14.5, fontWeight: "700", letterSpacing: 0.1 },
+  employeeNameInactive: { color: MUTED },
+  inactiveTag: { color: "#B42318", fontSize: 8.5, fontWeight: "800", letterSpacing: 0.7, backgroundColor: "#FFF3F2", paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4, overflow: "hidden" },
+  subRow: { flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
+  deptText: { flexShrink: 1, fontSize: 11, fontWeight: "700" },
+  subSeparator: { color: "#C9C2B8", fontSize: 11, fontWeight: "700" },
+  mobileMeta: { flexShrink: 0, color: MUTED, fontSize: 11, fontVariant: ["tabular-nums"] },
   callButton: {
-    alignSelf: "center",
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    marginRight: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
-      ios: { shadowColor: PRIMARY, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3 },
+      ios: { shadowColor: PRIMARY, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 3 },
       android: { elevation: 2 },
-      web: { boxShadow: "0 2px 4px rgba(120,7,13,0.25)" },
+      web: { boxShadow: "0 2px 4px rgba(120,7,13,0.22)" },
     }),
   },
-  skeletonList: { gap: 7 },
-  skeletonCard: { height: 60, borderRadius: 16, backgroundColor: "#EFEBE4" },
+  skeletonSheet: { borderRadius: 18, borderWidth: 1, borderColor: ROW_BORDER, backgroundColor: SURFACE, overflow: "hidden" },
+  skeletonRow: { height: ROW_HEIGHT, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 },
+  skeletonBar: { width: 4, height: 34, borderRadius: 2, backgroundColor: "#EFEBE4" },
+  skeletonLines: { flex: 1, gap: 7 },
+  skeletonLineLong: { width: "55%", height: 11, borderRadius: 5, backgroundColor: "#EFEBE4" },
+  skeletonLineShort: { width: "75%", height: 9, borderRadius: 5, backgroundColor: "#F4F0EA" },
+  skeletonButton: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#EFEBE4" },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
