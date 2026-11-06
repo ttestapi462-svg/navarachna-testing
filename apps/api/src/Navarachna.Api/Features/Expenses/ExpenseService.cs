@@ -103,7 +103,8 @@ public class ExpenseService(
             }
         });
 
-        return ToResponse(expense, ToSpecialistMap(employees));
+        var userNames = await LoadAuditUserNamesAsync([expense.CreatedBy, expense.UpdatedBy], ct);
+        return ToResponse(expense, ToSpecialistMap(employees), userNames);
     }
 
     public async Task<PagedResult<ExpenseResponse>> ListAsync(
@@ -169,9 +170,11 @@ public class ExpenseService(
 
         var specialists = await LoadSourcingSpecialistsAsync(
             items.SelectMany(expense => expense.SourcingSpecialistIds), ct);
+        var userNames = await LoadAuditUserNamesAsync(
+            items.SelectMany(expense => new[] { expense.CreatedBy, expense.UpdatedBy }), ct);
 
         return new PagedResult<ExpenseResponse>(
-            items.Select(expense => ToResponse(expense, specialists)).ToList(),
+            items.Select(expense => ToResponse(expense, specialists, userNames)).ToList(),
             q.Page,
             q.PageSize,
             total);
@@ -189,7 +192,8 @@ public class ExpenseService(
             return null;
 
         var specialists = await LoadSourcingSpecialistsAsync(e.SourcingSpecialistIds, ct);
-        return ToResponse(e, specialists);
+        var userNames = await LoadAuditUserNamesAsync([e.CreatedBy, e.UpdatedBy], ct);
+        return ToResponse(e, specialists, userNames);
     }
 
     public async Task<ExpenseResponse?> UpdateAsync(
@@ -246,7 +250,8 @@ public class ExpenseService(
         if (oldBlob is not null && !string.Equals(oldBlob, newBlob, StringComparison.Ordinal))
             await TryDeleteBlobAsync(oldBlob);
 
-        return ToResponse(e, ToSpecialistMap(employees));
+        var userNames = await LoadAuditUserNamesAsync([e.CreatedBy, e.UpdatedBy], ct);
+        return ToResponse(e, ToSpecialistMap(employees), userNames);
     }
 
     /// <summary>
@@ -334,6 +339,30 @@ public class ExpenseService(
         return ToSpecialistMap(employees);
     }
 
+    private async Task<Dictionary<long, string>> LoadAuditUserNamesAsync(
+        IEnumerable<long?> ids,
+        CancellationToken ct)
+    {
+        var uniqueIds = ids
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToArray();
+        if (uniqueIds.Length == 0)
+            return [];
+
+        var users = await db.Users.AsNoTracking()
+            .Where(user => uniqueIds.Contains(user.Id))
+            .Select(user => new { user.Id, user.FirstName, user.LastName, user.Username })
+            .ToListAsync(ct);
+
+        return users.ToDictionary(user => user.Id, user =>
+        {
+            var name = $"{user.FirstName} {user.LastName}".Trim();
+            return string.IsNullOrWhiteSpace(name) ? user.Username : name;
+        });
+    }
+
     private static Dictionary<int, SourcingSpecialistResponse> ToSpecialistMap(
         IReadOnlyDictionary<int, Employee> employees) => employees
         .ToDictionary(pair => pair.Key, pair => ToSpecialistResponse(pair.Value));
@@ -346,7 +375,8 @@ public class ExpenseService(
 
     private static ExpenseResponse ToResponse(
         Expense e,
-        IReadOnlyDictionary<int, SourcingSpecialistResponse> specialists) => new(
+        IReadOnlyDictionary<int, SourcingSpecialistResponse> specialists,
+        IReadOnlyDictionary<long, string> userNames) => new(
         e.Id,
         e.ExpenseDate,
         e.Amount,
@@ -359,6 +389,9 @@ public class ExpenseService(
         e.BillFileName,
         $"/api/expenses/{e.Id}/bill",
         e.CreatedBy,
+        e.CreatedBy is { } createdById && userNames.TryGetValue(createdById, out var createdByName) ? createdByName : null,
         e.CreatedAt,
+        e.UpdatedBy,
+        e.UpdatedBy is { } updatedById && userNames.TryGetValue(updatedById, out var updatedByName) ? updatedByName : null,
         e.UpdatedAt);
 }

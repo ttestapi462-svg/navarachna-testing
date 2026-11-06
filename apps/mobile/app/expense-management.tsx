@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   Share,
   ScrollView,
   StatusBar,
@@ -155,15 +156,19 @@ type ExpenseFieldErrors = {
 };
 
 const PAGE_SIZE = 10;
-const EXPENSE_CARD_GAP = 6;
-const LOAD_MORE_FOOTER_HEIGHT = 64;
+const EXPENSE_CARD_GAP = 8;
 const MAX_BILL_SIZE = 5 * 1024 * 1024;
+const DISPLAY_RECEIPT_FILENAME = "receipt.png";
 const PRIMARY = "#78070D";
+const PRIMARY_MUTED = "#FBF2F3";
 const TEXT = "#231E1C";
 const TEXT_MUTED = "#6E6862";
 const BORDER = "#E8E2D8";
 const SURFACE = "#FFFFFF";
 const BACKGROUND = "#FAF7F2";
+const SUCCESS = "#059669";
+const DANGER = "#DC2626";
+const DANGER_BG = "#FEE2E2";
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
 function localIsoToday() {
@@ -340,11 +345,12 @@ export default function ExpenseManagementScreen() {
   const activeFormFieldRef = useRef<string | null>(null);
   const formScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [totalCount, setTotalCount] = useState(0);
-  const [listViewportHeight, setListViewportHeight] = useState(0);
   const [pageLoading, setPageLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
 
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -382,8 +388,16 @@ export default function ExpenseManagementScreen() {
 
   const [billLoading, setBillLoading] = useState(false);
   const billLoadingRef = useRef(false);
+  const formReceiptPreviewRequestRef = useRef<AbortController | null>(null);
+  const formReceiptPreviewObjectUrlRef = useRef<string | null>(null);
+  const [formReceiptPreviewVisible, setFormReceiptPreviewVisible] = useState(false);
+  const [formReceiptPreviewUrl, setFormReceiptPreviewUrl] = useState<string | null>(null);
+  const [formReceiptPreviewIsPdf, setFormReceiptPreviewIsPdf] = useState(false);
+  const [formReceiptPreviewPdfBase64, setFormReceiptPreviewPdfBase64] = useState<string | null>(null);
+  const [formReceiptPreviewPdfImage, setFormReceiptPreviewPdfImage] = useState<string | null>(null);
+  const [formReceiptPreviewLoading, setFormReceiptPreviewLoading] = useState(false);
+  const [formReceiptPreviewError, setFormReceiptPreviewError] = useState("");
   const billPreviewRequestRef = useRef<AbortController | null>(null);
-  const returnToDetailRef = useRef(false);
   const [billPreviewVisible, setBillPreviewVisible] = useState(false);
   const [billPreviewUrl, setBillPreviewUrl] = useState<string | null>(null);
   const [billPreviewIsPdf, setBillPreviewIsPdf] = useState(false);
@@ -393,6 +407,16 @@ export default function ExpenseManagementScreen() {
   const [detailVisible, setDetailVisible] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const expenseCardHeight = listViewportHeight
+    ? Math.max(1, (listViewportHeight - getTabBarContentPadding(insets.bottom) - 2 - 5 * EXPENSE_CARD_GAP) / 6)
+    : 82;
+
+  useEffect(() => () => {
+    formReceiptPreviewRequestRef.current?.abort();
+    if (formReceiptPreviewObjectUrlRef.current) {
+      URL.revokeObjectURL(formReceiptPreviewObjectUrlRef.current);
+    }
+  }, []);
 
   const centerFormField = useCallback((field: string, delay = 0, animated = true) => {
     activeFormFieldRef.current = field;
@@ -409,7 +433,6 @@ export default function ExpenseManagementScreen() {
   }, []);
 
   const loadMoreRef = useRef(false);
-  const userHasStartedScrollingRef = useRef(false);
   const currentPageRef = useRef(1);
 
   // Infinite scroll: load a page and append or replace
@@ -417,8 +440,8 @@ export default function ExpenseManagementScreen() {
     async (refresh = false) => {
       if (refresh) setRefreshing(true);
       else setPageLoading(true);
+      setLoadFailed(false);
 
-      userHasStartedScrollingRef.current = false;
       currentPageRef.current = 1;
 
       const query = new URLSearchParams({
@@ -444,13 +467,7 @@ export default function ExpenseManagementScreen() {
         setExpenses(newItems);
         setTotalCount(newTotal);
       } catch (error) {
-        setNotice({
-          kind: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Unable to load expenses.",
-        });
+        setLoadFailed(true);
         setExpenses([]);
         setTotalCount(0);
       } finally {
@@ -528,18 +545,9 @@ export default function ExpenseManagementScreen() {
     if (toDate) query.set("toDate", toDate);
 
     try {
-      const request = mobileApiClient<ExpensePageResult | Expense[]>(
+      const result = await mobileApiClient<ExpensePageResult | Expense[]>(
         `/api/expenses?${query.toString()}`
-      ).then(
-        (result) => ({ ok: true as const, result }),
-        (error: unknown) => ({ ok: false as const, error })
       );
-      const [response] = await Promise.all([
-        request,
-        new Promise<void>((resolve) => setTimeout(resolve, 4000)),
-      ]);
-      if (!response.ok) throw response.error;
-      const result = response.result;
       let newItems: Expense[];
       let newTotal: number;
       if (Array.isArray(result)) {
@@ -558,6 +566,10 @@ export default function ExpenseManagementScreen() {
       currentPageRef.current = nextPage;
     } catch (err) {
       console.warn("Failed to load more expenses", err);
+      setNotice({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Could not load more expenses.",
+      });
     } finally {
       setLoadingMore(false);
       loadMoreRef.current = false;
@@ -568,18 +580,6 @@ export default function ExpenseManagementScreen() {
   const hasDateFilter = Boolean(fromDate && toDate);
   const calendarDaySize = Math.max(29, Math.min(34, Math.floor((windowWidth - 112) / 7)));
   const dateSheetMaxHeight = Math.min(windowHeight * 0.78, 620);
-  const expenseCardHeight = listViewportHeight > 0
-    ? Math.max(
-        78,
-        Math.floor((listViewportHeight - getTabBarHeight(insets.bottom) - 30) / 6)
-      )
-    : undefined;
-  const expenseListBottomPadding = expenseCardHeight
-    ? Math.max(
-        getTabBarHeight(insets.bottom),
-        listViewportHeight - (6 * expenseCardHeight + 5 * EXPENSE_CARD_GAP)
-      )
-    : getTabBarContentPadding(insets.bottom) + 13;
   const filteredSourcingSpecialists = useMemo(() => {
     const term = specialistSearch.trim().toLowerCase();
     return sourcingSpecialists.filter((employee) =>
@@ -1098,7 +1098,7 @@ export default function ExpenseManagementScreen() {
       newErrors.sourcingSpecialistIds = "Select at least one team member";
     }
 
-    if (!editing && !selectedBill) {
+    if (!selectedBill && !editing?.billFileName) {
       newErrors.bill = "Receipt file is required";
     } else if (selectedBill && selectedBill.size > MAX_BILL_SIZE) {
       newErrors.bill = "Receipt files must be 5 MB or smaller";
@@ -1147,197 +1147,89 @@ export default function ExpenseManagementScreen() {
     }
   };
 
-  // Card tap opens bill preview with Download button inside
-  const openBillPreview = async (expense: Expense) => {
-    if (billLoadingRef.current) return;
+  const closeFormReceiptPreview = () => {
+    formReceiptPreviewRequestRef.current?.abort();
+    formReceiptPreviewRequestRef.current = null;
+    if (formReceiptPreviewObjectUrlRef.current) {
+      URL.revokeObjectURL(formReceiptPreviewObjectUrlRef.current);
+      formReceiptPreviewObjectUrlRef.current = null;
+    }
+    setFormReceiptPreviewVisible(false);
+    setFormReceiptPreviewUrl(null);
+    setFormReceiptPreviewIsPdf(false);
+    setFormReceiptPreviewPdfBase64(null);
+    setFormReceiptPreviewPdfImage(null);
+    setFormReceiptPreviewLoading(false);
+    setFormReceiptPreviewError("");
+  };
+
+  const openFormReceiptPreview = async () => {
+    formReceiptPreviewRequestRef.current?.abort();
+    if (formReceiptPreviewObjectUrlRef.current) {
+      URL.revokeObjectURL(formReceiptPreviewObjectUrlRef.current);
+      formReceiptPreviewObjectUrlRef.current = null;
+    }
+    setFormReceiptPreviewUrl(null);
+    setFormReceiptPreviewIsPdf(false);
+    setFormReceiptPreviewPdfBase64(null);
+    setFormReceiptPreviewPdfImage(null);
+    setFormReceiptPreviewError("");
+    setFormReceiptPreviewVisible(true);
+    Keyboard.dismiss();
+
+    if (selectedBill) {
+      const isPdf = selectedBill.type.toLowerCase().includes("pdf") || selectedBill.name.toLowerCase().endsWith(".pdf");
+      setFormReceiptPreviewIsPdf(isPdf);
+      setFormReceiptPreviewUrl(selectedBill.uri);
+      return;
+    }
+
+    if (!editing?.billFileName) {
+      setFormReceiptPreviewError("No receipt is attached to this expense.");
+      return;
+    }
+
     const request = new AbortController();
-    billPreviewRequestRef.current = request;
-    billLoadingRef.current = true;
-    returnToDetailRef.current = true;
-    setActiveExpense(expense);
-    // Avoid stacking two native Modal windows. On iOS/Expo Go the detail sheet
-    // can remain the active presentation and intercept touches on the preview.
-    setDetailVisible(false);
-    setBillPreviewVisible(false);
-    setBillLoading(true);
-    setBillPreviewUrl(null);
-    setBillPreviewPdfBase64(null);
-    setBillPreviewPdfImage(null);
-    setBillPreviewIsPdf(false);
+    formReceiptPreviewRequestRef.current = request;
+    setFormReceiptPreviewLoading(true);
     try {
-      if (Platform.OS !== "web") {
-        await new Promise((resolve) => setTimeout(resolve, 260));
-      }
-      setBillPreviewVisible(true);
-      const response = await fetchBillResponse(expense, request.signal);
-      if (request.signal.aborted) return;
-      const filename = filenameFromResponse(
-        response,
-        expense.billFileName || `expense-${expense.id}-bill`
-      );
-      const contentType =
-        response.headers.get("content-type") || mimeFromName(filename);
-      const isPdf =
-        contentType.toLowerCase().includes("application/pdf") ||
-        filename.toLowerCase().endsWith(".pdf");
-      setBillPreviewIsPdf(isPdf);
+      const response = await fetchBillResponse(editing, request.signal);
+      if (!response.ok) throw new Error("Unable to load this receipt.");
+      const filename = filenameFromResponse(response, editing.billFileName);
+      const contentType = response.headers.get("content-type") || mimeFromName(filename);
+      const isPdf = contentType.toLowerCase().includes("application/pdf") || filename.toLowerCase().endsWith(".pdf");
       const bytes = await response.arrayBuffer();
       if (request.signal.aborted) return;
+      setFormReceiptPreviewIsPdf(isPdf);
+
       if (Platform.OS === "web") {
-        setBillPreviewUrl(
-          URL.createObjectURL(new Blob([bytes], { type: contentType }))
-        );
-      } else {
-        if (isPdf) {
-          const bytesView = new Uint8Array(bytes);
-          let binary = "";
-          const chunkSize = 0x8000;
-          for (let offset = 0; offset < bytesView.length; offset += chunkSize) {
-            binary += String.fromCharCode(...bytesView.subarray(offset, offset + chunkSize));
-          }
-          setBillPreviewPdfBase64(btoa(binary));
-          return;
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+        formReceiptPreviewObjectUrlRef.current = objectUrl;
+        setFormReceiptPreviewUrl(objectUrl);
+      } else if (isPdf) {
+        const bytesView = new Uint8Array(bytes);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytesView.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytesView.subarray(offset, offset + chunkSize));
         }
-        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const safeName =
-          isPdf && !sanitizedFilename.toLowerCase().endsWith(".pdf")
-            ? `${sanitizedFilename}.pdf`
-            : sanitizedFilename;
-        const previewFile = new File(
-          Paths.cache,
-          `${expense.id}-${Date.now()}-${safeName}`
-        );
+        setFormReceiptPreviewPdfBase64(btoa(binary));
+      } else {
+        const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const previewFile = new File(Paths.cache, `expense-${editing.id}-${Date.now()}-${safeFilename}`);
         await previewFile.write(new Uint8Array(bytes));
         if (request.signal.aborted) return;
-        setBillPreviewUrl(previewFile.uri);
+        setFormReceiptPreviewUrl(previewFile.uri);
       }
     } catch (error) {
       if (!request.signal.aborted) {
-        setBillPreviewUrl(null);
-        setNotice({
-          kind: "error",
-          message:
-            error instanceof Error ? error.message : "Unable to load bill preview.",
-        });
+        setFormReceiptPreviewError(error instanceof Error ? error.message : "Unable to load this receipt.");
       }
     } finally {
-      if (billPreviewRequestRef.current === request) {
-        billPreviewRequestRef.current = null;
-        billLoadingRef.current = false;
-        setBillLoading(false);
+      if (!request.signal.aborted) {
+        formReceiptPreviewRequestRef.current = null;
+        setFormReceiptPreviewLoading(false);
       }
-    }
-  };
-
-  const closeBillPreview = async () => {
-    billPreviewRequestRef.current?.abort();
-    billPreviewRequestRef.current = null;
-    billLoadingRef.current = false;
-    setBillLoading(false);
-    setBillPreviewVisible(false);
-    if (Platform.OS === "web" && billPreviewUrl?.startsWith("blob:")) {
-      URL.revokeObjectURL(billPreviewUrl);
-    }
-    setBillPreviewUrl(null);
-    setBillPreviewPdfBase64(null);
-    setBillPreviewPdfImage(null);
-    setBillPreviewIsPdf(false);
-
-    if (returnToDetailRef.current) {
-      returnToDetailRef.current = false;
-      if (Platform.OS !== "web") {
-        await new Promise((resolve) => setTimeout(resolve, 220));
-      }
-      setDetailVisible(true);
-    }
-  };
-
-  const viewBill = async (expense?: Expense) => {
-    if (!expense && selectedBill) {
-      try {
-        if (Platform.OS === "web") {
-          const opened = window.open(
-            selectedBill.uri,
-            "_blank",
-            "noopener,noreferrer"
-          );
-          if (!opened)
-            setNotice({
-              kind: "error",
-              message:
-                "Your browser blocked the preview. Use Download bill instead.",
-            });
-        } else {
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(selectedBill.uri, {
-              mimeType: selectedBill.type,
-              dialogTitle: selectedBill.name,
-            });
-          }
-        }
-      } catch (error) {
-        setNotice({
-          kind: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Unable to view the selected bill.",
-        });
-      }
-      return;
-    }
-    if (!expense) return;
-    if (billLoadingRef.current) return;
-
-    billLoadingRef.current = true;
-    setBillLoading(true);
-    const previewWindow =
-      Platform.OS === "web" ? window.open("about:blank", "_blank") : null;
-    try {
-      const response = await fetchBillResponse(expense);
-      const filename = filenameFromResponse(
-        response,
-        expense.billFileName || `expense-${expense.id}-bill`
-      );
-      const contentType =
-        response.headers.get("content-type") || mimeFromName(filename);
-      const bytes = await response.arrayBuffer();
-      if (Platform.OS === "web") {
-        const blob = new Blob([bytes], { type: contentType });
-        const objectUrl = URL.createObjectURL(blob);
-        if (previewWindow) previewWindow.location.href = objectUrl;
-        else {
-          triggerBrowserDownload(blob, filename);
-          setNotice({
-            kind: "success",
-            message: "Preview was blocked; the bill download was started.",
-          });
-        }
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      } else {
-        const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const savedFile = new File(Paths.cache, safeName);
-        await savedFile.write(new Uint8Array(bytes));
-        const canShare = await Sharing.isAvailableAsync();
-        if (!canShare) {
-          throw new Error("Native file sharing is not available on this device.");
-        }
-        await Sharing.shareAsync(savedFile.uri, {
-          mimeType: contentType,
-          dialogTitle: filename,
-        });
-      }
-    } catch (error) {
-      previewWindow?.close();
-      setNotice({
-        kind: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to view the bill.",
-      });
-    } finally {
-      billLoadingRef.current = false;
-      setBillLoading(false);
     }
   };
 
@@ -1451,6 +1343,83 @@ export default function ExpenseManagementScreen() {
     }
   };
 
+  const openBillPreview = async (expense: Expense) => {
+    if (billLoadingRef.current) return;
+    billPreviewRequestRef.current?.abort();
+    const request = new AbortController();
+    billPreviewRequestRef.current = request;
+    billLoadingRef.current = true;
+    setActiveExpense(expense);
+    setDetailVisible(false);
+    setBillPreviewVisible(false);
+    setBillLoading(true);
+    setBillPreviewUrl(null);
+    setBillPreviewPdfBase64(null);
+    setBillPreviewPdfImage(null);
+    setBillPreviewIsPdf(false);
+
+    try {
+      if (Platform.OS !== "web") await new Promise((resolve) => setTimeout(resolve, 260));
+      if (request.signal.aborted) return;
+      setBillPreviewVisible(true);
+      const response = await fetchBillResponse(expense, request.signal);
+      if (!response.ok) throw new Error("Unable to load this receipt.");
+      const filename = filenameFromResponse(response, expense.billFileName || `expense-${expense.id}-bill`);
+      const contentType = response.headers.get("content-type") || mimeFromName(filename);
+      const isPdf = contentType.toLowerCase().includes("application/pdf") || filename.toLowerCase().endsWith(".pdf");
+      const bytes = await response.arrayBuffer();
+      if (request.signal.aborted) return;
+      setBillPreviewIsPdf(isPdf);
+
+      if (Platform.OS === "web") {
+        setBillPreviewUrl(URL.createObjectURL(new Blob([bytes], { type: contentType })));
+      } else if (isPdf) {
+        const bytesView = new Uint8Array(bytes);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytesView.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytesView.subarray(offset, offset + chunkSize));
+        }
+        setBillPreviewPdfBase64(btoa(binary));
+      } else {
+        const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const previewFile = new File(Paths.cache, `${expense.id}-${Date.now()}-${safeFilename}`);
+        await previewFile.write(new Uint8Array(bytes));
+        if (request.signal.aborted) return;
+        setBillPreviewUrl(previewFile.uri);
+      }
+    } catch (error) {
+      if (!request.signal.aborted) {
+        setBillPreviewUrl(null);
+        setNotice({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Unable to load receipt preview.",
+        });
+      }
+    } finally {
+      if (billPreviewRequestRef.current === request) {
+        billPreviewRequestRef.current = null;
+        billLoadingRef.current = false;
+        setBillLoading(false);
+      }
+    }
+  };
+
+  const closeBillPreview = () => {
+    billPreviewRequestRef.current?.abort();
+    billPreviewRequestRef.current = null;
+    billLoadingRef.current = false;
+    setBillLoading(false);
+    setBillPreviewVisible(false);
+    if (Platform.OS === "web" && billPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(billPreviewUrl);
+    }
+    setBillPreviewUrl(null);
+    setBillPreviewPdfBase64(null);
+    setBillPreviewPdfImage(null);
+    setBillPreviewIsPdf(false);
+  };
+
   const confirmDelete = (expense: Expense) => {
     if (deletingId !== null) return;
     requestAnimationFrame(() => setExpenseToDelete(expense));
@@ -1542,13 +1511,13 @@ export default function ExpenseManagementScreen() {
   const openExpenseDetail = (expense: Expense) => {
     Keyboard.dismiss();
     setActiveExpense(expense);
+    setBillPreviewVisible(false);
     setDetailVisible(true);
-    setBillPreviewUrl(null);
-    setBillPreviewPdfBase64(null);
   };
 
   const hasFormFile = Boolean(selectedBill || (editing && editing.billFileName));
   const formFileName = selectedBill?.name || editing?.billFileName || "";
+  const formFileDisplayName = hasFormFile ? DISPLAY_RECEIPT_FILENAME : "";
   const formFileIsPdf = formFileName.toLowerCase().endsWith(".pdf");
   const formFileExt = getFileExtension(formFileName) || (formFileIsPdf ? "PDF" : "IMG");
   const formFileSize = selectedBill?.size ? formatFileSize(selectedBill.size) : "";
@@ -1560,17 +1529,350 @@ export default function ExpenseManagementScreen() {
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" />
 
+      {/* EXPENSE DETAIL MODAL (Opens on card tap) */}
+      <Modal
+        visible={detailVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDetailVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setDetailVisible(false)}
+          />
+          <View
+            style={[
+              styles.modalCard,
+              { paddingBottom: Math.max(insets.bottom, 16) + 12 },
+            ]}
+          >
+            <View style={styles.sheetHandleRow}>
+              <View style={styles.sheetHandle} />
+            </View>
+
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Expense details</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setDetailVisible(false)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Close expense details"
+              >
+                <X size={17} color={TEXT_MUTED} />
+              </TouchableOpacity>
+            </View>
+
+            {activeExpense ? (
+              <ScrollView
+                style={{
+                  maxHeight: Math.min(
+                    520,
+                    Math.max(180, windowHeight - insets.top - insets.bottom - 116)
+                  ),
+                  flexShrink: 1,
+                }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  paddingTop: 12,
+                  paddingBottom: 20,
+                  gap: 0,
+                }}
+              >
+                {/* ── HERO BAND ── */}
+                <View
+                  style={{
+                    borderRadius: 18,
+                    overflow: "hidden",
+                    marginBottom: 10,
+                    backgroundColor: "#fff5f5",
+                    borderWidth: 1,
+                    borderColor: "#fda4af",
+                    padding: 16,
+                  }}
+                >
+                  {/* Amount and date share one compact row. */}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: PRIMARY, letterSpacing: 0.45, marginBottom: 3 }}>
+                        TOTAL AMOUNT
+                      </Text>
+                      <Text style={{ fontSize: 29, fontWeight: "800", color: PRIMARY, letterSpacing: -0.7, lineHeight: 33 }}>
+                        {money(activeExpense.amount)}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: SURFACE, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fda4af" }}>
+                      <CalendarDays size={12} color={PRIMARY} />
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: TEXT }}>
+                        {displayDate(activeExpense.expenseDate)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.sourcingSpecialistDetail}>
+                  <Text style={styles.sourcingSpecialistDetailLabel}>HANDLED BY</Text>
+                  {activeExpense.sourcingSpecialists?.length ? (
+                    <View style={styles.detailSpecialistChips}>
+                      {activeExpense.sourcingSpecialists.map((employee) => (
+                        <SpecialistChip key={employee.id} employee={employee} />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.sourcingSpecialistNoAssignment}>No staff assigned</Text>
+                  )}
+                </View>
+
+                {/* ── NOTES STRIP ── */}
+                {activeExpense.categoryNotes ? (
+                  <View
+                    style={{
+                      backgroundColor: SURFACE,
+                      borderRadius: 14,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      marginBottom: 10,
+                      borderLeftWidth: 3,
+                      borderLeftColor: PRIMARY,
+                      borderWidth: 1,
+                      borderColor: BORDER,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: TEXT_MUTED, letterSpacing: 0.5, marginBottom: 4 }}>
+                      NOTES / PURPOSE
+                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: "500", color: TEXT, lineHeight: 20 }}>
+                      {activeExpense.categoryNotes}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* ── BILL / RECEIPT ROW ── */}
+                {activeExpense.billFileName ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: SURFACE,
+                      borderRadius: 14,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: BORDER,
+                      gap: 10,
+                    }}
+                  >
+                    {/* icon */}
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center" }}>
+                      {activeExpense.billFileName.toLowerCase().endsWith(".pdf") ? (
+                        <FileText size={20} color={PRIMARY} />
+                      ) : (
+                        <FileImage size={20} color={PRIMARY} />
+                      )}
+                    </View>
+                    {/* name + type */}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: TEXT }} numberOfLines={1} ellipsizeMode="middle">
+                        {DISPLAY_RECEIPT_FILENAME}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 1 }}>
+                        {activeExpense.billFileName.toLowerCase().endsWith(".pdf") ? "PDF Document" : "Receipt Image"}
+                      </Text>
+                    </View>
+                    {/* View receipt — icon only */}
+                    <TouchableOpacity
+                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFC2D5" }}
+                      onPress={() => void openBillPreview(activeExpense)}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityLabel="View receipt"
+                    >
+                      <Eye size={16} color={PRIMARY} />
+                    </TouchableOpacity>
+                    {/* Download icon only — no label */}
+                    <TouchableOpacity
+                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center" }}
+                      onPress={() => void downloadBill(activeExpense)}
+                      disabled={billLoading}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityLabel="Download receipt"
+                    >
+                      {billLoading ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <ArrowDownToLine size={16} color="#ffffff" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: BACKGROUND, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
+                    <FileText size={16} color={TEXT_MUTED} />
+                    <Text style={{ fontSize: 12.5, color: TEXT_MUTED, fontStyle: "italic" }}>No receipt attached</Text>
+                  </View>
+                )}
+
+                {/* Edit and delete actions are labeled on the detail page. */}
+                <View style={styles.detailActionFooter}>
+                  <TouchableOpacity
+                    style={styles.actionIconButtonEdit}
+                    onPress={() => {
+                      setDetailVisible(false);
+                      editExpense(activeExpense);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit expense"
+                  >
+                    <Pencil size={18} color={TEXT} />
+                    <Text style={styles.detailActionText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionIconButtonDelete}
+                    onPress={() => {
+                      setDetailVisible(false);
+                      confirmDelete(activeExpense);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete expense"
+                  >
+                    <Trash2 size={18} color={PRIMARY} />
+                    <Text style={styles.detailActionDeleteText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 5. BILL PREVIEW MODAL (Tapping View opens bill preview from downward) */}
+      <Modal
+        visible={billPreviewVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeBillPreview}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeBillPreview}
+          />
+          <View
+            style={[
+              styles.modalCard,
+              { maxHeight: "90%", paddingBottom: Math.max(insets.bottom, 16) + 14 },
+            ]}
+          >
+            <View style={styles.sheetHandleRow}>
+              <View style={styles.sheetHandle} />
+            </View>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {activeExpense?.billFileName || "Bill preview"}
+                </Text>
+                <Text style={styles.modalSubtitle}>Receipt preview</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={closeBillPreview}
+                  activeOpacity={0.7}
+                >
+                  <X size={17} color={TEXT_MUTED} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.billPreviewContainer}>
+              {billPreviewIsPdf && billPreviewPdfBase64 && Platform.OS !== "web" ? (
+                <>
+                  {billPreviewPdfImage ? (
+                    <Image
+                      source={{ uri: billPreviewPdfImage }}
+                      style={styles.billPreviewImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={styles.loadingBox}>
+                      <ActivityIndicator size="large" color={PRIMARY} />
+                      <Text style={styles.loadingText}>Preparing PDF preview…</Text>
+                    </View>
+                  )}
+                  <WebView
+                    source={{ html: createPdfPreviewHtml(billPreviewPdfBase64) }}
+                    originWhitelist={["*"]}
+                    javaScriptEnabled
+                    style={styles.pdfRenderWorker}
+                    onMessage={(event) => {
+                      const value = event.nativeEvent.data;
+                      if (value.startsWith("data:image/png;base64,")) {
+                        setBillPreviewPdfImage(value);
+                      } else {
+                        setNotice({ kind: "error", message: "Unable to render this PDF receipt." });
+                      }
+                    }}
+                    onError={() => setNotice({ kind: "error", message: "Unable to render this PDF receipt." })}
+                  />
+                </>
+              ) : billLoading ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="large" color={PRIMARY} />
+                  <Text style={styles.loadingText}>Loading receipt…</Text>
+                </View>
+              ) : billPreviewIsPdf && billPreviewPdfBase64 ? (
+                Platform.OS === "web" ? (
+                  billPreviewUrl ? (
+                    <iframe
+                      src={billPreviewUrl}
+                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
+                      title="Receipt PDF"
+                    />
+                  ) : null
+                ) : null
+              ) : billPreviewUrl ? (
+                billPreviewIsPdf ? (
+                  Platform.OS === "web" ? (
+                    <iframe
+                      src={billPreviewUrl}
+                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
+                      title="Receipt PDF"
+                    />
+                  ) : null
+                ) : (
+                  <Image
+                    source={{ uri: billPreviewUrl }}
+                    style={styles.billPreviewImage}
+                    resizeMode="contain"
+                  />
+                )
+              ) : (
+                <View style={styles.pdfFallbackBox}>
+                  <FileText size={48} color={PRIMARY} />
+                  <Text style={styles.pdfFallbackText}>
+                    {billLoading ? "Preparing receipt preview…" : "Receipt preview is unavailable."}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <>
+
       {/* 1. TOP APP BAR: "Expense management" title + Receipt Icon + Add (+) button (no MP profile avatar) */}
       <AtelierHeader
-        title="Expense management"
+        title="Expenses"
         showProfile={false}
         backgroundColor="#FAF7F2"
-        barStyle={styles.expenseHeaderBar}
-        brandContainerStyle={styles.expenseHeaderBrand}
-        preserveTitleSize
-        brandMarkStyle={styles.expenseBrandMark}
-        brandTitleStyle={styles.expenseBrandTitle}
-        icon={<ReceiptText size={26} color="#78070D" strokeWidth={2.4} />}
+        icon={<ReceiptText size={24} color="#78070D" strokeWidth={2.4} />}
         rightAction={
           <TouchableOpacity
             style={styles.headerAddButton}
@@ -1584,9 +1886,8 @@ export default function ExpenseManagementScreen() {
         }
       />
 
-      {/* FIXED TOP SECTION (No separate title row, no Refresh button - search sits directly under app bar with 8px gap) */}
+      {/* Search and date filters follow the Customer screen's two-row toolbar pattern. */}
       <View style={styles.fixedTopSection}>
-        {/* 3. SEARCH ROW (44px tall, magnifier hint, 300ms debounce, enter key, clear x icon) */}
         <View style={styles.toolbarRow}>
           <View style={styles.searchBox}>
             <Search size={16} color="#9AA3B5" />
@@ -1611,31 +1912,29 @@ export default function ExpenseManagementScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
+        </View>
 
-          {/* Calendar icon button: 44px, dot when active, opens date sheet */}
+        <View style={styles.filterChipRow}>
           <TouchableOpacity
-            style={[
-              styles.iconButtonFilter,
-              hasDateFilter && styles.iconButtonFilterActive,
-            ]}
+            style={[styles.dateRangeChip, hasDateFilter && styles.dateRangeChipActive]}
             onPress={openDateFilter}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Filter by date range"
           >
-            <View style={styles.filterIconWrapper}>
-              <CalendarDays
-                size={18}
-                color={hasDateFilter ? PRIMARY : TEXT_MUTED}
-              />
-              {hasDateFilter && <View style={styles.activeFilterDot} />}
-            </View>
+            <CalendarDays size={14} color={hasDateFilter ? PRIMARY : TEXT_MUTED} />
+            <Text style={[styles.dateRangeChipText, hasDateFilter && styles.dateRangeChipTextActive]}>
+              Date range
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* 4. DATE FILTER: Removable chip under search row when active */}
-        {hasDateFilter ? (
-          <View style={styles.appliedFilterRow}>
+          {!pageLoading ? (
+            <View style={styles.resultCountChip}>
+              <Text style={styles.resultCountText}>Expenses ({totalCount})</Text>
+            </View>
+          ) : null}
+
+          {hasDateFilter ? (
             <View style={styles.appliedFilterChip}>
               <CalendarDays size={13} color={PRIMARY} />
               <Text style={styles.appliedFilterText}>
@@ -1644,29 +1943,24 @@ export default function ExpenseManagementScreen() {
               <TouchableOpacity
                 onPress={clearDateRange}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
                 accessibilityLabel="Clear date filter"
               >
                 <X size={13} color={PRIMARY} />
               </TouchableOpacity>
             </View>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
       {/* 2. PULL-TO-REFRESH & SCROLLABLE EXPENSE LIST with infinite scroll */}
-      <View
-        style={styles.listContainer}
-        onLayout={(event) => setListViewportHeight(event.nativeEvent.layout.height)}
-      >
+      <View style={styles.listContainer} onLayout={(event) => setListViewportHeight(event.nativeEvent.layout.height)}>
         <FlatList
           data={pageLoading ? [] : expenses}
           keyExtractor={(expense) => String(expense.id)}
           renderItem={({ item: expense }) => (
             <TouchableOpacity
-              style={[
-                styles.compactCard,
-                expenseCardHeight ? { height: expenseCardHeight } : undefined,
-              ]}
+              style={[styles.compactCard, { height: expenseCardHeight }]}
               activeOpacity={0.7}
               onPress={() => openExpenseDetail(expense)}
               accessibilityRole="button"
@@ -1680,9 +1974,12 @@ export default function ExpenseManagementScreen() {
                       {displayDate(expense.expenseDate)}
                     </Text>
                   </View>
-                  <Text style={styles.cardAmountText} numberOfLines={1}>
-                    {money(expense.amount)}
-                  </Text>
+                  <View style={styles.cardAmountActionRow}>
+                    <Text style={styles.cardAmountText} numberOfLines={1}>
+                      {money(expense.amount)}
+                    </Text>
+                    <ChevronRight size={17} color={TEXT_MUTED} />
+                  </View>
                 </View>
                 <View style={styles.expenseSourcingRow}>
                   <View style={styles.expenseSourceIconSlot}>
@@ -1713,25 +2010,41 @@ export default function ExpenseManagementScreen() {
           ListHeaderComponent={
             pageLoading ? (
               <View style={styles.expenseList}>
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <View key={`skel-${index}`} style={styles.skeletonCompactCard} />
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <View key={`skel-${index}`} style={[styles.skeletonCompactCard, { height: expenseCardHeight }]} />
                 ))}
               </View>
             ) : undefined
           }
           ListEmptyComponent={
             !pageLoading ? (
-              <Card style={styles.emptyCard}>
+              <View style={styles.emptyCard}>
                 <View style={styles.emptyIcon}>
-                  <Search size={24} color={PRIMARY} />
+                  {loadFailed ? (
+                    <AlertCircle size={24} color={DANGER} />
+                  ) : (
+                    <Search size={24} color={PRIMARY} />
+                  )}
                 </View>
-                <Text style={styles.emptyTitle}>No expenses found</Text>
+                <Text style={styles.emptyTitle}>{loadFailed ? "Couldn't load expenses" : "No expenses found"}</Text>
                 <Text style={styles.emptyText}>
-                  {hasFilters
+                  {loadFailed
+                    ? "Check your connection and try again."
+                    : hasFilters
                     ? "Try a different search or date range."
                     : "Add your first expense to get started."}
                 </Text>
-                {hasFilters ? (
+                {loadFailed ? (
+                  <TouchableOpacity
+                    style={styles.emptyAction}
+                    onPress={() => void loadExpenses()}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading expenses"
+                  >
+                    <Text style={styles.emptyActionText}>Try again</Text>
+                  </TouchableOpacity>
+                ) : hasFilters ? (
                   <TouchableOpacity
                     style={styles.emptyAction}
                     onPress={clearFilters}
@@ -1742,49 +2055,36 @@ export default function ExpenseManagementScreen() {
                     <Text style={styles.emptyActionText}>Clear filters</Text>
                   </TouchableOpacity>
                 ) : null}
-              </Card>
+              </View>
             ) : undefined
           }
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadMoreRow}>
-                <ActivityIndicator size="large" color={PRIMARY} />
+                <ActivityIndicator size="small" color={PRIMARY} />
+                <Text style={styles.loadMoreText}>Loading more expenses...</Text>
               </View>
             ) : undefined
           }
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: expenseListBottomPadding },
+            { paddingBottom: getTabBarContentPadding(insets.bottom) },
           ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={PRIMARY}
+              colors={[PRIMARY]}
+            />
+          }
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          onScrollBeginDrag={() => {
-            userHasStartedScrollingRef.current = true;
-            Keyboard.dismiss();
-          }}
-          onScroll={(event) => {
-            if (!userHasStartedScrollingRef.current) return;
-            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-            const distanceFromEnd =
-              contentSize.height - layoutMeasurement.height - contentOffset.y;
-            if (distanceFromEnd <= Math.max(110, (expenseCardHeight || 78) + EXPENSE_CARD_GAP)) {
-              void loadMore();
-            }
-          }}
-          scrollEventThrottle={16}
-          refreshing={refreshing}
-          onRefresh={() => void handleRefresh()}
-          progressViewOffset={8}
-          onEndReached={() => {
-            if (userHasStartedScrollingRef.current) void loadMore();
-          }}
-          onEndReachedThreshold={0.25}
-          snapToInterval={expenseCardHeight ? expenseCardHeight + EXPENSE_CARD_GAP : undefined}
-          snapToAlignment="start"
-          snapToEnd={false}
-          decelerationRate="fast"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={7}
@@ -1793,11 +2093,16 @@ export default function ExpenseManagementScreen() {
         />
       </View>
 
+      </>
+
       {/* 4. DATE RANGE SHEET MODAL (No quick-range chips, calendar only, pinned Clear all & Apply range) */}
       <Modal
         visible={filtersVisible}
         animationType="slide"
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setFiltersVisible(false)}
       >
         <View style={styles.modalBackdrop}>
@@ -1973,8 +2278,12 @@ export default function ExpenseManagementScreen() {
         visible={formVisible}
         animationType="slide"
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => {
-          if (datePickerVisible) setDatePickerVisible(false);
+          if (formReceiptPreviewVisible) closeFormReceiptPreview();
+          else if (datePickerVisible) setDatePickerVisible(false);
           else if (specialistOptionsOpen) {
             setSpecialistOptionsOpen(false);
             setSpecialistSearch("");
@@ -1991,8 +2300,13 @@ export default function ExpenseManagementScreen() {
           />
           <View
             style={[
-              styles.modalCard,
-              { paddingBottom: Math.max(insets.bottom, 16) + 14 },
+              styles.expenseFormModalCard,
+              {
+                paddingBottom: Math.max(
+                  insets.bottom,
+                  Platform.OS === "android" ? 20 : 12
+                ),
+              },
             ]}
           >
             <View style={styles.sheetHandleRow}>
@@ -2024,6 +2338,13 @@ export default function ExpenseManagementScreen() {
               </TouchableOpacity>
             </View>
 
+            {formError ? (
+              <View style={styles.formError}>
+                <AlertCircle size={14} color={DANGER} />
+                <Text style={styles.formErrorText}>{formError}</Text>
+              </View>
+            ) : null}
+
             <ScrollView
               ref={formScrollRef}
               style={{ flexShrink: 1 }}
@@ -2035,7 +2356,7 @@ export default function ExpenseManagementScreen() {
               contentContainerStyle={styles.modalBody}
             >
               {/* Expense date */}
-              <Text style={styles.fieldLabel}>
+              <Text style={[styles.fieldLabel, styles.firstFieldLabel]}>
                 Expense date <Text style={styles.requiredStar}>*</Text>
               </Text>
               <TouchableOpacity
@@ -2066,13 +2387,10 @@ export default function ExpenseManagementScreen() {
               >
                 <CalendarDays
                   size={16}
-                  color={fieldErrors.expenseDate ? "#ef4444" : PRIMARY}
+                  color={fieldErrors.expenseDate ? DANGER : PRIMARY}
                 />
                 <Text
-                  style={[
-                    styles.textInputWithIcon,
-                    fieldErrors.expenseDate && styles.textInputError,
-                  ]}
+                  style={styles.textInputWithIcon}
                 >
                   {formValues.expenseDate
                     ? displayDate(formValues.expenseDate)
@@ -2080,12 +2398,7 @@ export default function ExpenseManagementScreen() {
                 </Text>
               </TouchableOpacity>
               {fieldErrors.expenseDate ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>
-                    {fieldErrors.expenseDate}
-                  </Text>
-                </View>
+                <Text style={styles.fieldErrorText}>{fieldErrors.expenseDate}</Text>
               ) : null}
 
               {/* Amount (INR) */}
@@ -2107,7 +2420,7 @@ export default function ExpenseManagementScreen() {
                 <Text
                   style={[
                     styles.rupeeIcon,
-                    fieldErrors.amount && { color: "#ef4444" },
+                    fieldErrors.amount && { color: DANGER },
                   ]}
                 >
                   ₹
@@ -2123,26 +2436,23 @@ export default function ExpenseManagementScreen() {
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor="#9AA3B5"
-                  style={[
-                    styles.textInputWithIcon,
-                    fieldErrors.amount && styles.textInputError,
-                  ]}
+                  style={styles.textInputWithIcon}
                   accessibilityLabel="Expense amount in rupees"
                   onFocus={() => centerFormField("amount")}
                 />
               </View>
               {fieldErrors.amount ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>{fieldErrors.amount}</Text>
-                </View>
+                <Text style={styles.fieldErrorText}>{fieldErrors.amount}</Text>
               ) : null}
 
               <Text style={styles.fieldLabel}>
                 Handled by <Text style={styles.requiredStar}>*</Text>
               </Text>
               <View
-                style={styles.sourcingSpecialistPicker}
+                style={[
+                  styles.sourcingSpecialistPicker,
+                  fieldErrors.sourcingSpecialistIds && styles.inputErrorRow,
+                ]}
                 onLayout={(event) => {
                   formFieldLayoutsRef.current.specialist = {
                     y: event.nativeEvent.layout.y,
@@ -2193,20 +2503,15 @@ export default function ExpenseManagementScreen() {
 
               </View>
               {fieldErrors.sourcingSpecialistIds ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>{fieldErrors.sourcingSpecialistIds}</Text>
-                </View>
+                <Text style={styles.fieldErrorText}>
+                  {fieldErrors.sourcingSpecialistIds}
+                </Text>
               ) : null}
 
               {/* Bill / receipt: two clear options side by side ("Take photo" and "Upload file") */}
               <Text style={styles.fieldLabel}>
                 Bill / receipt{" "}
-                {editing ? (
-                  <Text style={styles.optionalBadge}>(optional)</Text>
-                ) : (
-                  <Text style={styles.requiredStar}>*</Text>
-                )}
+                <Text style={styles.requiredStar}>*</Text>
               </Text>
               {hasFormFile ? (
                 /* Single file card after file chosen: type icon, middle truncated name, size, View, Replace, Remove */
@@ -2231,11 +2536,11 @@ export default function ExpenseManagementScreen() {
                           numberOfLines={1}
                           ellipsizeMode="tail"
                         >
-                          {splitMiddleTruncate(formFileName).start}
+                          {splitMiddleTruncate(formFileDisplayName).start}
                         </Text>
-                        {splitMiddleTruncate(formFileName).end ? (
+                        {splitMiddleTruncate(formFileDisplayName).end ? (
                           <Text style={styles.formFileCardNameEnd}>
-                            {splitMiddleTruncate(formFileName).end}
+                            {splitMiddleTruncate(formFileDisplayName).end}
                           </Text>
                         ) : null}
                       </View>
@@ -2248,15 +2553,11 @@ export default function ExpenseManagementScreen() {
                   <View style={styles.formFileCardActions}>
                     <TouchableOpacity
                       style={styles.formMicroIconButton}
-                      onPress={() =>
-                        void (selectedBill
-                          ? viewBill()
-                          : viewBill(editing || undefined))
-                      }
-                      disabled={billLoading}
+                        onPress={() => void openFormReceiptPreview()}
+                        disabled={formReceiptPreviewLoading}
                       activeOpacity={0.7}
                       accessibilityRole="button"
-                      accessibilityLabel="View bill"
+                        accessibilityLabel="Preview receipt"
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Eye size={15} color={PRIMARY} />
@@ -2323,10 +2624,7 @@ export default function ExpenseManagementScreen() {
                 </View>
               )}
               {fieldErrors.bill ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>{fieldErrors.bill}</Text>
-                </View>
+                <Text style={styles.fieldErrorText}>{fieldErrors.bill}</Text>
               ) : null}
 
               {/* Category / notes */}
@@ -2355,24 +2653,12 @@ export default function ExpenseManagementScreen() {
                   styles.textInput,
                   styles.notesInputCompact,
                   fieldErrors.categoryNotes && styles.inputErrorRow,
-                  fieldErrors.categoryNotes && styles.textInputError,
                 ]}
               />
               {fieldErrors.categoryNotes ? (
-                <View style={styles.fieldErrorBanner}>
-                  <AlertCircle size={13} color="#ef4444" />
-                  <Text style={styles.fieldErrorText}>
-                    {fieldErrors.categoryNotes}
-                  </Text>
-                </View>
+                <Text style={styles.fieldErrorText}>{fieldErrors.categoryNotes}</Text>
               ) : null}
 
-              {formError ? (
-                <View style={styles.formError}>
-                  <AlertCircle size={15} color="#be123c" />
-                  <Text style={styles.formErrorText}>{formError}</Text>
-                </View>
-              ) : null}
             </ScrollView>
 
             {/* Fixed footer: Cancel + Create expense */}
@@ -2385,6 +2671,7 @@ export default function ExpenseManagementScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
+                <X size={14} color={DANGER} strokeWidth={2.4} />
                 <Text style={styles.cancelTextOutlineRed}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -2509,10 +2796,11 @@ export default function ExpenseManagementScreen() {
                 <View style={styles.calendarFooter}>
                   <TouchableOpacity
                     onPress={() => setDatePickerVisible(false)}
-                    style={styles.filterClear}
+                    style={styles.cancelButtonOutlineRed}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.filterClearText}>Cancel</Text>
+                    <X size={14} color={DANGER} strokeWidth={2.4} />
+                    <Text style={styles.cancelTextOutlineRed}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
@@ -2724,361 +3012,119 @@ export default function ExpenseManagementScreen() {
               </View>
             </View>
           ) : null}
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* EXPENSE DETAIL MODAL (Opens on card tap) */}
-      <Modal
-        visible={detailVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDetailVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setDetailVisible(false)}
-          />
-          <View
-            style={[
-              styles.modalCard,
-              { paddingBottom: Math.max(insets.bottom, 10) },
-            ]}
-          >
-            <View style={styles.sheetHandleRow}>
-              <View style={styles.sheetHandle} />
-            </View>
-
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeadingRow}>
-                <View style={styles.modalHeadingPrefix}>
-                  <ReceiptText size={18} color={PRIMARY} strokeWidth={2.3} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                  <Text style={styles.modalTitle}>Expense details</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setDetailVisible(false)}
-                activeOpacity={0.7}
+          {formReceiptPreviewVisible ? (
+            <View style={[StyleSheet.absoluteFill, styles.formReceiptPreviewBackdrop]}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={closeFormReceiptPreview}
                 accessibilityRole="button"
-                accessibilityLabel="Close expense details"
+                accessibilityLabel="Close receipt preview"
+              />
+              <View
+                style={[
+                  styles.modalCard,
+                  styles.formReceiptPreviewSheet,
+                  {
+                    maxHeight: "90%",
+                    paddingBottom: Math.max(insets.bottom, 16) + 14,
+                  },
+                ]}
               >
-                <X size={17} color={TEXT_MUTED} />
-              </TouchableOpacity>
-            </View>
-
-            {activeExpense ? (
-              <ScrollView
-                style={{
-                  maxHeight: Math.min(
-                    520,
-                    Math.max(180, windowHeight - insets.top - insets.bottom - 116)
-                  ),
-                  flexShrink: 1,
-                }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingHorizontal: 14,
-                  paddingTop: 12,
-                  paddingBottom: 4,
-                  gap: 0,
-                }}
-              >
-                {/* ── HERO BAND ── */}
-                <View
-                  style={{
-                    borderRadius: 18,
-                    overflow: "hidden",
-                    marginBottom: 16,
-                    backgroundColor: "#fff5f5",
-                    borderWidth: 1,
-                    borderColor: "#fda4af",
-                    padding: 20,
-                  }}
-                >
-                  {/* Amount and date share one compact row. */}
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: PRIMARY, letterSpacing: 0.45, marginBottom: 3 }}>
-                        TOTAL AMOUNT
-                      </Text>
-                      <Text style={{ fontSize: 29, fontWeight: "800", color: PRIMARY, letterSpacing: -0.7, lineHeight: 33 }}>
-                        {money(activeExpense.amount)}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: SURFACE, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fda4af" }}>
-                      <CalendarDays size={12} color={PRIMARY} />
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: TEXT }}>
-                        {displayDate(activeExpense.expenseDate)}
-                      </Text>
-                    </View>
-                  </View>
+                <View style={styles.sheetHandleRow}>
+                  <View style={styles.sheetHandle} />
                 </View>
-
-                <View style={styles.sourcingSpecialistDetail}>
-                  <Text style={styles.sourcingSpecialistDetailLabel}>HANDLED BY</Text>
-                  {activeExpense.sourcingSpecialists?.length ? (
-                    <View style={styles.detailSpecialistChips}>
-                      {activeExpense.sourcingSpecialists.map((employee) => (
-                        <SpecialistChip key={employee.id} employee={employee} />
-                      ))}
-                    </View>
-                  ) : (
-                    <Text style={styles.sourcingSpecialistNoAssignment}>No staff assigned</Text>
-                  )}
-                </View>
-
-                {/* ── NOTES STRIP ── */}
-                {activeExpense.categoryNotes ? (
-                  <View
-                    style={{
-                      backgroundColor: SURFACE,
-                      borderRadius: 14,
-                      paddingHorizontal: 14,
-                      paddingVertical: 16,
-                      marginBottom: 14,
-                      borderLeftWidth: 3,
-                      borderLeftColor: PRIMARY,
-                      borderWidth: 1,
-                      borderColor: BORDER,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "800", color: TEXT_MUTED, letterSpacing: 0.5, marginBottom: 4 }}>
-                      NOTES / PURPOSE
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: "500", color: TEXT, lineHeight: 20 }}>
-                      {activeExpense.categoryNotes}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* ── BILL / RECEIPT ROW ── */}
-                {activeExpense.billFileName ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: SURFACE,
-                      borderRadius: 14,
-                      paddingHorizontal: 12,
-                      paddingVertical: 12,
-                      marginBottom: 12,
-                      borderWidth: 1,
-                      borderColor: BORDER,
-                      gap: 8,
-                    }}
-                  >
-                    {/* icon */}
-                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center" }}>
-                      {activeExpense.billFileName.toLowerCase().endsWith(".pdf") ? (
-                        <FileText size={20} color={PRIMARY} />
-                      ) : (
-                        <FileImage size={20} color={PRIMARY} />
-                      )}
-                    </View>
-                    {/* name + type */}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: TEXT }} numberOfLines={1} ellipsizeMode="middle">
-                        {activeExpense.billFileName}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 1 }}>
-                        {activeExpense.billFileName.toLowerCase().endsWith(".pdf") ? "PDF Document" : "Receipt Image"}
-                      </Text>
-                    </View>
-                    {/* View receipt — icon only */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeadingRow}>
                     <TouchableOpacity
-                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFF0F5", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFC2D5" }}
-                      onPress={() => void openBillPreview(activeExpense)}
-                      activeOpacity={0.75}
+                      style={styles.modalHeadingPrefix}
+                      onPress={closeFormReceiptPreview}
+                      activeOpacity={0.7}
                       accessibilityRole="button"
-                      accessibilityLabel="View receipt"
+                      accessibilityLabel="Back to expense form"
                     >
-                      <Eye size={18} color={PRIMARY} />
+                      <ChevronLeft size={20} color={PRIMARY} />
                     </TouchableOpacity>
-                    {/* Download icon only — no label */}
-                    <TouchableOpacity
-                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center" }}
-                      onPress={() => void downloadBill(activeExpense)}
-                      disabled={billLoading}
-                      activeOpacity={0.75}
-                      accessibilityRole="button"
-                      accessibilityLabel="Download receipt"
-                    >
-                      {billLoading ? (
-                        <ActivityIndicator size="small" color="#ffffff" />
-                      ) : (
-                        <ArrowDownToLine size={18} color="#ffffff" />
-                      )}
-                    </TouchableOpacity>
+                    <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                      <Text style={styles.modalTitle} numberOfLines={1}>
+                        {DISPLAY_RECEIPT_FILENAME}
+                      </Text>
+                      <Text style={styles.modalSubtitle}>Receipt preview</Text>
+                    </View>
                   </View>
-                ) : (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: BACKGROUND, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
-                    <FileText size={16} color={TEXT_MUTED} />
-                    <Text style={{ fontSize: 12.5, color: TEXT_MUTED, fontStyle: "italic" }}>No receipt attached</Text>
-                  </View>
-                )}
-
-                {/* Edit and delete actions are labeled on the detail page. */}
-                <View style={styles.detailActionFooter}>
                   <TouchableOpacity
-                    style={styles.actionIconButtonEdit}
-                    onPress={() => {
-                      setDetailVisible(false);
-                      editExpense(activeExpense);
-                    }}
-                    activeOpacity={0.75}
+                    style={styles.closeButton}
+                    onPress={closeFormReceiptPreview}
+                    activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel="Edit expense"
+                    accessibilityLabel="Close receipt preview"
                   >
-                    <Pencil size={18} color={TEXT} />
-                    <Text style={styles.detailActionText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionIconButtonDelete}
-                    onPress={() => {
-                      setDetailVisible(false);
-                      confirmDelete(activeExpense);
-                    }}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityLabel="Delete expense"
-                  >
-                    <Trash2 size={18} color={PRIMARY} />
-                    <Text style={styles.detailActionDeleteText}>Delete</Text>
+                    <X size={17} color={TEXT_MUTED} />
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
-
-      {/* 5. BILL PREVIEW MODAL (Tapping View opens bill preview from downward) */}
-      <Modal
-        visible={billPreviewVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={closeBillPreview}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeBillPreview}
-          />
-          <View
-            style={[
-              styles.modalCard,
-              { maxHeight: "90%", paddingBottom: Math.max(insets.bottom, 16) + 14 },
-            ]}
-          >
-            <View style={styles.sheetHandleRow}>
-              <View style={styles.sheetHandle} />
-            </View>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeadingRow}>
-                <TouchableOpacity
-                  style={styles.modalHeadingPrefix}
-                  onPress={closeBillPreview}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to expense details"
-                >
-                  <ChevronLeft size={20} color={PRIMARY} />
-                </TouchableOpacity>
-                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                  <Text style={styles.modalTitle} numberOfLines={1}>
-                    {activeExpense?.billFileName || "Bill preview"}
-                  </Text>
-                  <Text style={styles.modalSubtitle}>Receipt preview</Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={closeBillPreview}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close and return to details"
-                >
-                  <X size={17} color={TEXT_MUTED} />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.billPreviewContainer}>
-              {billPreviewIsPdf && billPreviewPdfBase64 && Platform.OS !== "web" ? (
-                <>
-                  {billPreviewPdfImage ? (
+                <View style={styles.formReceiptPreviewBody}>
+                  {formReceiptPreviewLoading ? (
+                    <View style={styles.formReceiptPreviewMessage}>
+                      <ActivityIndicator size="large" color={PRIMARY} />
+                      <Text style={styles.expenseDetailReceiptHint}>Loading receipt…</Text>
+                    </View>
+                  ) : formReceiptPreviewError ? (
+                    <View style={styles.formReceiptPreviewMessage}>
+                      <FileText size={34} color={TEXT_MUTED} />
+                      <Text style={styles.expenseDetailReceiptHint}>{formReceiptPreviewError}</Text>
+                    </View>
+                  ) : formReceiptPreviewIsPdf && formReceiptPreviewPdfBase64 && Platform.OS !== "web" ? (
+                    <>
+                      {formReceiptPreviewPdfImage ? (
+                        <Image
+                          source={{ uri: formReceiptPreviewPdfImage }}
+                          style={styles.formReceiptPreviewImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.formReceiptPreviewMessage}>
+                          <ActivityIndicator size="large" color={PRIMARY} />
+                          <Text style={styles.expenseDetailReceiptHint}>Preparing PDF preview…</Text>
+                        </View>
+                      )}
+                      <WebView
+                        source={{ html: createPdfPreviewHtml(formReceiptPreviewPdfBase64) }}
+                        originWhitelist={["*"]}
+                        javaScriptEnabled
+                        style={styles.pdfRenderWorker}
+                        onMessage={(event: any) => {
+                          const value = event.nativeEvent.data;
+                          if (value.startsWith("data:image/png;base64,")) {
+                            setFormReceiptPreviewPdfImage(value);
+                          } else {
+                            setFormReceiptPreviewError("Unable to render this PDF receipt.");
+                          }
+                        }}
+                        onError={() => setFormReceiptPreviewError("Unable to render this PDF receipt.")}
+                      />
+                    </>
+                  ) : formReceiptPreviewIsPdf && formReceiptPreviewUrl && Platform.OS === "web" ? (
+                    <iframe
+                      src={formReceiptPreviewUrl}
+                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
+                      title={DISPLAY_RECEIPT_FILENAME}
+                    />
+                  ) : formReceiptPreviewUrl ? (
                     <Image
-                      source={{ uri: billPreviewPdfImage }}
-                      style={styles.billPreviewImage}
+                      source={{ uri: formReceiptPreviewUrl }}
+                      style={styles.formReceiptPreviewImage}
                       resizeMode="contain"
                     />
                   ) : (
-                    <View style={styles.loadingBox}>
-                      <ActivityIndicator size="large" color={PRIMARY} />
-                      <Text style={styles.loadingText}>Preparing PDF preview…</Text>
+                    <View style={styles.formReceiptPreviewMessage}>
+                      <FileText size={34} color={TEXT_MUTED} />
+                      <Text style={styles.expenseDetailReceiptHint}>Receipt preview is unavailable.</Text>
                     </View>
                   )}
-                  <WebView
-                    source={{ html: createPdfPreviewHtml(billPreviewPdfBase64) }}
-                    originWhitelist={["*"]}
-                    javaScriptEnabled
-                    style={styles.pdfRenderWorker}
-                    onMessage={(event: any) => {
-                      const value = event.nativeEvent.data;
-                      if (value.startsWith("data:image/png;base64,")) {
-                        setBillPreviewPdfImage(value);
-                      } else {
-                        setNotice({ kind: "error", message: "Unable to render this PDF receipt." });
-                      }
-                    }}
-                    onError={() => setNotice({ kind: "error", message: "Unable to render this PDF receipt." })}
-                  />
-                </>
-              ) : billLoading ? (
-                <View style={styles.loadingBox}>
-                  <ActivityIndicator size="large" color={PRIMARY} />
-                  <Text style={styles.loadingText}>Loading receipt…</Text>
                 </View>
-              ) : billPreviewIsPdf && billPreviewPdfBase64 ? (
-                Platform.OS === "web" ? (
-                  billPreviewUrl ? (
-                    <iframe
-                      src={billPreviewUrl}
-                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
-                      title="Receipt PDF"
-                    />
-                  ) : null
-                ) : null
-              ) : billPreviewUrl ? (
-                billPreviewIsPdf ? (
-                  Platform.OS === "web" ? (
-                    <iframe
-                      src={billPreviewUrl}
-                      style={{ width: "100%", height: 360, border: "none", borderRadius: 12 }}
-                      title="Receipt PDF"
-                    />
-                  ) : null
-                ) : (
-                  <Image
-                    source={{ uri: billPreviewUrl }}
-                    style={styles.billPreviewImage}
-                    resizeMode="contain"
-                  />
-                )
-              ) : (
-                <View style={styles.pdfFallbackBox}>
-                  <FileText size={48} color={PRIMARY} />
-                  <Text style={styles.pdfFallbackText}>
-                    {billLoading ? "Preparing receipt preview…" : "Receipt preview is unavailable."}
-                  </Text>
-                </View>
-              )}
+              </View>
             </View>
-          </View>
-        </View>
+          ) : null}
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Delete Confirmation Alert Dialog */}
@@ -3088,6 +3134,7 @@ export default function ExpenseManagementScreen() {
         transparent
         presentationStyle="overFullScreen"
         statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => {
           if (!deletingId) setExpenseToDelete(null);
         }}
@@ -3101,7 +3148,7 @@ export default function ExpenseManagementScreen() {
           />
           <Card style={styles.confirmCard}>
             <View style={styles.confirmIcon}>
-              <Trash2 size={22} color={PRIMARY} />
+              <Trash2 size={22} color={DANGER} />
             </View>
             <Text style={styles.confirmTitle}>Delete this expense?</Text>
             <Text style={styles.confirmMessage}>
@@ -3127,6 +3174,7 @@ export default function ExpenseManagementScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Cancel delete"
               >
+                <X size={14} color={DANGER} strokeWidth={2.4} />
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -3144,9 +3192,9 @@ export default function ExpenseManagementScreen() {
                 accessibilityLabel="Confirm delete"
               >
                 {deletingId !== null ? (
-                  <ActivityIndicator size="small" color={PRIMARY} />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Trash2 size={15} color={PRIMARY} />
+                  <Trash2 size={15} color="#FFFFFF" />
                 )}
                 <Text style={styles.deleteConfirmText}>
                   {deletingId !== null ? "Deleting…" : "Delete expense"}
@@ -3164,6 +3212,7 @@ export default function ExpenseManagementScreen() {
         transparent
         presentationStyle="overFullScreen"
         statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={stopCamera}
       >
         <View style={styles.cameraBackdrop}>
@@ -3206,6 +3255,7 @@ export default function ExpenseManagementScreen() {
                 style={styles.cameraCancelBtn}
                 onPress={stopCamera}
               >
+                <X size={14} color="#ffffff" strokeWidth={2.4} />
                 <Text style={styles.cameraCancelText}>Cancel</Text>
               </TouchableOpacity>
 
@@ -3232,55 +3282,199 @@ export default function ExpenseManagementScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    height: "100%",
     backgroundColor: BACKGROUND,
+  },
+  expenseDetailScreen: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: BACKGROUND,
+  },
+  expenseDetailContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    minHeight: 0,
+  },
+  expenseDetailHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  expenseDetailHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  expenseDetailDeleteButton: {
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FECACA",
+  },
+  expenseDetailSummaryCard: {
+    minHeight: 82,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SURFACE,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    marginBottom: 10,
+  },
+  expenseDetailDateGroup: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  expenseDetailDateIcon: {
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    borderRadius: 10,
+    backgroundColor: PRIMARY_MUTED,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  expenseDetailDateCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  expenseDetailMetaLabel: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.55,
+    marginBottom: 4,
+  },
+  expenseDetailDateValue: {
+    color: PRIMARY,
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
+  expenseDetailSummaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 38,
+    backgroundColor: BORDER,
+    marginHorizontal: 10,
+  },
+  expenseDetailAmountGroup: {
+    maxWidth: "42%",
+    alignItems: "flex-end",
+  },
+  expenseDetailAmountValue: {
+    color: PRIMARY,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  expenseDetailReceiptAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  expenseDetailDownloadAction: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  expenseDetailReceiptCard: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: SURFACE,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 12,
+    gap: 10,
+    marginBottom: 0,
+  },
+  expenseDetailReceiptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  expenseDetailReceiptIcon: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 12,
+    backgroundColor: "#FFF0F5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  expenseDetailReceiptCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  expenseDetailReceiptName: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  expenseDetailReceiptType: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  expenseDetailReceiptPreview: {
+    flex: 1,
+    width: "100%",
+    minHeight: 0,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: "#FCFAF7",
+    alignItems: "center",
+    justifyContent: "center",
     overflow: "hidden",
   },
+  expenseDetailReceiptImage: {
+    width: "100%",
+    height: "100%",
+  },
+  expenseDetailReceiptLoading: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+  },
+  expenseDetailReceiptHint: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    textAlign: "center",
+  },
   headerAddButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: PRIMARY,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3,
-      },
-      default: {
-        boxShadow: "0 2px 5px rgba(120, 7, 13, 0.22)",
-      },
-    }),
-  },
-  expenseBrandMark: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  expenseHeaderBar: {
-    paddingHorizontal: 0,
-    height: 44,
-  },
-  expenseHeaderBrand: {
-    gap: 10,
-    alignItems: "center",
-  },
-  expenseBrandTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: "800",
-    color: "#78070D",
-    letterSpacing: -0.4,
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-        textAlignVertical: "center",
-      },
-    }),
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   fixedTopSection: {
     paddingHorizontal: 16,
@@ -3290,9 +3484,8 @@ const styles = StyleSheet.create({
     height: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 6,
+    marginTop: 6,
+    marginBottom: 8,
   },
   searchBox: {
     flex: 1,
@@ -3305,10 +3498,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13.5,
     color: TEXT,
     height: 44,
     paddingVertical: 0,
@@ -3318,56 +3516,68 @@ const styles = StyleSheet.create({
       } as any,
     }),
   },
-  iconButtonFilter: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#E9EAF1",
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconButtonFilterActive: {
-    borderColor: "#FFC2D5",
-    backgroundColor: "#FFF0F5",
-  },
-  filterIconWrapper: {
-    position: "relative",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activeFilterDot: {
-    position: "absolute",
-    top: -2,
-    right: -3,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: PRIMARY,
-    borderWidth: 1.5,
-    borderColor: SURFACE,
-  },
-  appliedFilterRow: {
+  filterChipRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  dateRangeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E8E2D8",
+    backgroundColor: SURFACE,
+  },
+  dateRangeChipActive: {
+    backgroundColor: "#FBF2F3",
+    borderColor: "#C69596",
+  },
+  dateRangeChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: TEXT_MUTED,
+  },
+  dateRangeChipTextActive: {
+    color: PRIMARY,
+    fontWeight: "700",
   },
   appliedFilterChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: "#FFF0F5",
+    paddingHorizontal: 12,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    backgroundColor: "#FBF2F3",
     borderWidth: 1,
-    borderColor: "#FFC2D5",
+    borderColor: "#C69596",
   },
   appliedFilterText: {
     fontSize: 12,
     fontWeight: "700",
     color: PRIMARY,
+  },
+  resultCountChip: {
+    alignSelf: "flex-start",
+    minHeight: 31,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: SURFACE,
+  },
+  resultCountText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: TEXT_MUTED,
   },
   listContainer: {
     flex: 1,
@@ -3378,7 +3588,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
+    paddingTop: 2,
     paddingBottom: 8,
+    gap: EXPENSE_CARD_GAP,
   },
   listHeadingRow: {
     minHeight: 48,
@@ -3423,44 +3635,46 @@ const styles = StyleSheet.create({
     color: PRIMARY,
   },
   expenseList: {
-    gap: 9,
-    paddingBottom: 6,
+    gap: EXPENSE_CARD_GAP,
   },
   compactCard: {
-    minHeight: 78,
     backgroundColor: SURFACE,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E9EAF1",
-    borderLeftWidth: 4,
-    borderLeftColor: PRIMARY,
+    borderColor: BORDER,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     flexDirection: "row",
-    alignItems: "stretch",
-    marginBottom: EXPENSE_CARD_GAP,
+    alignItems: "center",
     ...Platform.select({
       ios: {
-        shadowColor: "#292524",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.055,
-        shadowRadius: 7,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
       },
       android: { elevation: 1 },
-      web: { boxShadow: "0 3px 10px rgba(41, 37, 36, 0.055)" },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.03)" },
     }),
   },
   expenseCardContent: {
     flex: 1,
     minWidth: 0,
     justifyContent: "center",
-    gap: 10,
+    gap: 5,
   },
   expenseCardTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+  },
+  cardAmountActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+    flexShrink: 0,
   },
   expenseSourceIconSlot: {
     width: 15,
@@ -3471,7 +3685,7 @@ const styles = StyleSheet.create({
   },
   expenseSourcingRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 6,
     minWidth: 0,
   },
@@ -3546,8 +3760,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardDateText: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 18,
     color: TEXT,
     fontWeight: "700",
     letterSpacing: 0,
@@ -3559,9 +3773,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   cardAmountText: {
-    maxWidth: "58%",
-    fontSize: 20,
-    lineHeight: 23,
+    fontSize: 21,
+    lineHeight: 25,
     fontWeight: "800",
     color: PRIMARY,
     letterSpacing: -0.55,
@@ -3589,62 +3802,72 @@ const styles = StyleSheet.create({
     borderColor: "#ffe4e6",
   },
   skeletonCompactCard: {
-    height: 82,
+    height: 64,
     borderRadius: 16,
-    backgroundColor: "#f1f5f9",
-    borderLeftWidth: 4,
-    borderLeftColor: "#E9EAF1",
-    opacity: 0.7,
-    marginBottom: 10,
+    backgroundColor: "#EFEBE4",
   },
   emptyCard: {
-    padding: 32,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 20,
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+    backgroundColor: "transparent",
   },
   emptyIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFF0F5",
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FBF2F3",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 15.5,
+    fontWeight: "700",
     color: TEXT,
+    marginBottom: 4,
   },
   emptyText: {
-    fontSize: 12,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: TEXT_MUTED,
     textAlign: "center",
+    maxWidth: 260,
   },
   emptyAction: {
-    marginTop: 8,
-    paddingHorizontal: 14,
+    marginTop: 16,
+    paddingHorizontal: 16,
     paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: "#FFF0F5",
+    borderRadius: 18,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: "#E2DDD5",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: { elevation: 1 },
+      web: { boxShadow: "0 1px 2px rgba(0,0,0,0.04)" },
+    }),
   },
   emptyActionText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     color: PRIMARY,
   },
   loadMoreRow: {
-    height: LOAD_MORE_FOOTER_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    paddingVertical: 14,
   },
   loadMoreText: {
     fontSize: 12,
-    fontWeight: "600",
     color: TEXT_MUTED,
   },
   infiniteCountText: {
@@ -3897,52 +4120,109 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "flex-end",
+    margin: 0,
+    padding: 0,
   },
   dateSheetCard: {
     backgroundColor: SURFACE,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
   },
   modalCard: {
     backgroundColor: SURFACE,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    maxHeight: Platform.OS === "web" ? "92%" : "94%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+    maxHeight: "92%",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  formReceiptPreviewBackdrop: {
+    backgroundColor: "rgba(0, 0, 0, 0.48)",
+    justifyContent: "flex-end",
+  },
+  formReceiptPreviewSheet: {
+    width: "100%",
+  },
+  formReceiptPreviewBody: {
+    padding: 16,
+    minHeight: 250,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  formReceiptPreviewImage: {
+    width: "100%",
+    height: 350,
+    borderRadius: 12,
+  },
+  formReceiptPreviewMessage: {
+    width: "100%",
+    minHeight: 250,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 30,
+    gap: 10,
+  },
+  expenseFormModalCard: {
+    backgroundColor: SURFACE,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+    maxHeight: "92%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
   },
   sheetHandleRow: {
     alignItems: "center",
     paddingTop: 8,
-    paddingBottom: 2,
+    paddingBottom: 6,
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#D8DCE7",
+    width: 40,
+    height: 4.5,
+    borderRadius: 2.5,
+    backgroundColor: "#D4CEC6",
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 9,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: "#EAE5DC",
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: PRIMARY,
-    letterSpacing: -0.2,
+    fontSize: 16.5,
+    fontWeight: "700",
+    color: TEXT,
+    letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontSize: 11.5,
     color: TEXT_MUTED,
-    marginTop: 2,
+    marginTop: 1.5,
   },
   modalHeadingRow: {
     flexDirection: "row",
@@ -3952,10 +4232,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   modalHeadingPrefix: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: "#FFF0F5",
+    backgroundColor: "#FBF2F3",
+    borderWidth: 1,
+    borderColor: "rgba(120, 7, 13, 0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3966,9 +4248,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: BACKGROUND,
     borderWidth: 1,
     borderColor: BORDER,
@@ -4064,58 +4346,63 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: 18,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: "#EAE5DC",
     backgroundColor: SURFACE,
   },
   filterClear: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     minWidth: 90,
-    height: 42,
-    borderRadius: 14,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: "#E2DDD5",
+    backgroundColor: BACKGROUND,
     alignItems: "center",
     justifyContent: "center",
   },
   filterClearText: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12.5,
+    fontWeight: "600",
     color: TEXT_MUTED,
   },
   applyButton: {
-    paddingHorizontal: 22,
-    minWidth: 120,
-    height: 42,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    minWidth: 110,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
   },
   applyButtonDisabled: {
-    opacity: 0.4,
+    opacity: 0.6,
   },
   applyButtonText: {
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 12.5,
+    fontWeight: "600",
     color: "#ffffff",
   },
   modalBody: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "700",
     color: TEXT,
-    marginBottom: 6,
-    marginTop: 8,
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  firstFieldLabel: {
+    marginTop: 0,
   },
   requiredStar: {
-    color: "#ef4444",
-    fontSize: 13,
-    fontWeight: "700",
+    color: DANGER,
+    fontWeight: "800",
   },
   optionalBadge: {
     color: "#64748b",
@@ -4123,33 +4410,21 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   inputErrorRow: {
-    borderColor: "#f87171",
-    borderWidth: 1.5,
-    backgroundColor: "#fef2f2",
-  },
-  textInputError: {
-    color: "#991b1b",
-  },
-  fieldErrorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 5,
-    marginBottom: 4,
-    paddingHorizontal: 4,
+    borderColor: DANGER,
+    backgroundColor: "#FFF5F5",
   },
   fieldErrorText: {
-    color: "#ef4444",
-    fontSize: 12,
+    color: DANGER,
+    fontSize: 11,
     fontWeight: "500",
-    flex: 1,
+    marginTop: 2,
   },
   inputIconRow: {
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: SURFACE,
+    borderColor: "#DFD9D0",
+    backgroundColor: "#FCFAF7",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -4157,8 +4432,7 @@ const styles = StyleSheet.create({
   },
   textInputWithIcon: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13.5,
     color: TEXT,
   },
   rupeeIcon: {
@@ -4167,10 +4441,10 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
   textInput: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: SURFACE,
+    borderColor: "#DFD9D0",
+    backgroundColor: "#FCFAF7",
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13.5,
@@ -4185,20 +4459,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   filePickerPairError: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#f87171",
+    borderColor: DANGER,
     padding: 2,
-    backgroundColor: "#fef2f2",
+    backgroundColor: DANGER_BG,
   },
   filePickerHalfError: {
-    borderColor: "#ef4444",
-    backgroundColor: "#fef2f2",
+    borderColor: DANGER,
+    backgroundColor: "#FFF5F5",
   },
   filePickerHalf: {
     flex: 1,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderStyle: "dashed",
     borderColor: BORDER,
@@ -4218,7 +4492,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#FFC2D5",
     backgroundColor: "#FFF0F5",
@@ -4272,9 +4546,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   formMicroIconButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffffff",
@@ -4283,8 +4557,8 @@ const styles = StyleSheet.create({
   },
   formReplaceButton: {
     paddingHorizontal: 8,
-    height: 30,
-    borderRadius: 8,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#FFC2D5",
@@ -4297,9 +4571,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   formRemoveIconButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#FFC2D5",
@@ -4307,122 +4581,94 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   formError: {
-    marginTop: 8,
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
-    backgroundColor: "#FFF0F5",
+    gap: 8,
+    marginHorizontal: 18,
+    marginTop: 10,
+    padding: 10,
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#FFC2D5",
+    backgroundColor: DANGER_BG,
   },
   formErrorText: {
     flex: 1,
-    color: PRIMARY,
-    fontSize: 11.5,
+    fontSize: 12,
+    color: DANGER,
+    fontWeight: "600",
   },
   modalButtonsCompact: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 8,
-    marginTop: 14,
-    paddingTop: 12,
-    paddingHorizontal: 20,
+    marginTop: 0,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 18,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: "#EAE5DC",
+    backgroundColor: SURFACE,
   },
   cancelButtonOutlineRed: {
+    flexDirection: "row",
+    gap: 5,
     minWidth: 96,
-    height: 42,
-    paddingHorizontal: 18,
-    borderRadius: 21,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 19,
+    borderWidth: 1.2,
+    borderColor: "rgba(220, 38, 38, 0.55)",
     backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
   },
   cancelTextOutlineRed: {
-    color: PRIMARY,
-    fontSize: 13.5,
-    fontWeight: "700",
+    color: DANGER,
+    fontSize: 12.5,
+    fontWeight: "600",
   },
   saveButtonPrimary: {
     minWidth: 140,
-    height: 42,
-    paddingHorizontal: 20,
-    borderRadius: 21,
-    backgroundColor: "#16a34a",
+    height: 38,
+    paddingHorizontal: 16,
+    borderRadius: 19,
+    backgroundColor: SUCCESS,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 7,
+    gap: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: SUCCESS,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3,
+      },
+      default: {
+        elevation: 2,
+      },
+    }),
   },
   saveButtonPrimaryText: {
-    color: "#ffffff",
-    fontSize: 13.5,
-    fontWeight: "700",
-  },
-  detailActionFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  actionIconButtonEdit: {
-    minWidth: 104,
-    height: 42,
-    paddingHorizontal: 16,
-    borderRadius: 21,
-    borderWidth: 1.5,
-    borderColor: "#D8DCE7",
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionIconButtonDelete: {
-    minWidth: 104,
-    height: 42,
-    paddingHorizontal: 16,
-    borderRadius: 21,
-    backgroundColor: SURFACE,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  detailActionText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  detailActionDeleteText: {
-    color: PRIMARY,
-    fontSize: 13,
-    fontWeight: "700",
+    color: "#FFFFFF",
+    fontSize: 12.5,
+    fontWeight: "600",
   },
   cancelButton: {
-    flex: 0.85,
-    height: 42,
-    borderRadius: 21,
+    flex: 1,
+    flexDirection: "row",
+    gap: 5,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#D8DCE7",
+    borderColor: "#E2DDD5",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: SURFACE,
+    backgroundColor: BACKGROUND,
   },
   cancelText: {
-    color: TEXT,
-    fontSize: 12.5,
-    fontWeight: "800",
+    color: "#5C554F",
+    fontSize: 13,
+    fontWeight: "600",
   },
   saveButton: {
     flex: 1.15,
@@ -4440,11 +4686,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   disabledButton: {
-    opacity: 0.5,
+    opacity: 0.6,
   },
   calendarBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -4467,28 +4713,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
-  billPreviewContainer: {
-    padding: 16,
-    minHeight: 250,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: TEXT_MUTED,
-  },
-  billPreviewImage: {
-    width: "100%",
-    height: 350,
-    borderRadius: 12,
-  },
   pdfRenderWorker: {
     position: "absolute",
     width: 2,
@@ -4497,68 +4721,61 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
   },
-  pdfFallbackBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-    gap: 10,
-  },
-  pdfFallbackText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: TEXT_MUTED,
-  },
-  previewDownloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: PRIMARY,
-  },
-  previewDownloadText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
   confirmBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    backgroundColor: "rgba(35, 30, 28, 0.45)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: 20,
   },
   confirmCard: {
     width: "100%",
-    maxWidth: 340,
+    maxWidth: 320,
     backgroundColor: SURFACE,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#231E1C",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.14,
+        shadowRadius: 16,
+      },
+      default: {
+        elevation: 8,
+      },
+    }),
   },
   confirmIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#FFF0F5",
+    backgroundColor: DANGER_BG,
+    borderWidth: 1,
+    borderColor: "#FECACA",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   confirmTitle: {
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "700",
     color: TEXT,
     textAlign: "center",
+    marginBottom: 6,
+    letterSpacing: -0.2,
   },
   confirmMessage: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: TEXT_MUTED,
     textAlign: "center",
     lineHeight: 18,
-    marginTop: 4,
-    marginBottom: 12,
+    marginBottom: 18,
+    paddingHorizontal: 4,
   },
   confirmSummaryBox: {
     width: "100%",
@@ -4586,21 +4803,30 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   deleteConfirmButton: {
-    flex: 1.15,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: SURFACE,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
+    flex: 1,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: DANGER,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: DANGER,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+      },
+      default: {
+        elevation: 2,
+      },
+    }),
   },
   deleteConfirmText: {
-    color: PRIMARY,
-    fontSize: 12.5,
-    fontWeight: "800",
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   modernToastContainer: {
     position: "absolute",
@@ -4791,6 +5017,9 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
   },
   cameraCancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -4801,7 +5030,7 @@ const styles = StyleSheet.create({
   },
   handledByOverlay: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "flex-end",
   },
   handledBySheetCard: {
@@ -4810,9 +5039,14 @@ const styles = StyleSheet.create({
     marginTop: Platform.OS === "web" ? 18 : 0,
     maxHeight: "90%",
     backgroundColor: SURFACE,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
   },
   handledBySubtitle: {
     marginTop: 3,
@@ -4847,7 +5081,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   handledBySearch: {
-    minHeight: 48,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -4855,15 +5089,15 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 16,
     paddingHorizontal: 13,
-    borderRadius: 13,
-    backgroundColor: BACKGROUND,
+    borderRadius: 14,
+    backgroundColor: "#FCFAF7",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#DFD9D0",
   },
   handledBySearchInput: {
     flex: 1,
-    height: 46,
-    fontSize: 14,
+    height: 44,
+    fontSize: 13.5,
     color: TEXT,
   },
   handledByStaffList: {
@@ -4923,15 +5157,16 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   handledByFooter: {
-    minHeight: 68,
+    minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 10,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: "#EAE5DC",
   },
   handledByFooterCount: {
     flex: 1,
@@ -4940,28 +5175,28 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
   handledByDoneButton: {
-    minWidth: 104,
-    minHeight: 44,
+    minWidth: 96,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 20,
-    borderRadius: 13,
+    paddingHorizontal: 16,
+    borderRadius: 19,
     backgroundColor: PRIMARY,
   },
   handledByDoneText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 12.5,
+    fontWeight: "600",
   },
   sourcingSpecialistPicker: {
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 13,
-    backgroundColor: SURFACE,
+    borderColor: "#DFD9D0",
+    borderRadius: 14,
+    backgroundColor: "#FCFAF7",
     overflow: "hidden",
   },
   sourcingSpecialistTrigger: {
-    minHeight: 46,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -5023,12 +5258,89 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: 12,
   },
+  detailActionFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  actionIconButtonEdit: {
+    minWidth: 88,
+    height: 38,
+    paddingHorizontal: 13,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: "#D8DCE7",
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  actionIconButtonDelete: {
+    minWidth: 100,
+    height: 38,
+    paddingHorizontal: 13,
+    borderRadius: 19,
+    backgroundColor: SURFACE,
+    borderWidth: 1.5,
+    borderColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  detailActionText: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  detailActionDeleteText: {
+    color: PRIMARY,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  billPreviewContainer: {
+    padding: 16,
+    minHeight: 250,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  billPreviewImage: {
+    width: "100%",
+    height: 350,
+    borderRadius: 12,
+  },
+  loadingBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 30,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_MUTED,
+  },
+  pdfFallbackBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 30,
+    gap: 10,
+  },
+  pdfFallbackText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_MUTED,
+  },
   sourcingSpecialistDetail: {
     backgroundColor: SURFACE,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    marginBottom: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: BORDER,
   },

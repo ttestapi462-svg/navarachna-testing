@@ -28,7 +28,10 @@ public record ExpenseResponse(
     string BillFileName,
     string BillUrl,
     long? CreatedBy,
+    string? CreatedByUsername,
     DateTime CreatedAt,
+    long? UpdatedBy,
+    string? UpdatedByUsername,
     DateTime? UpdatedAt);
 
 public record SourcingSpecialistResponse(int Id, string FirstName, string? LastName, string DisplayName);

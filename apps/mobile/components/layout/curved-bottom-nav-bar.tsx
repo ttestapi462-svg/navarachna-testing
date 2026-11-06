@@ -66,7 +66,7 @@ function getActiveTabIndex(pathname: string): number {
   if (clean.endsWith("/orders")) return 1;
   if (clean.endsWith("/customer")) return 2;
   if (clean.endsWith("/expense")) return 3;
-  if (clean.endsWith("/more") || clean.includes("/more/")) {
+  if (clean.endsWith("/more") || clean.includes("/more/") || clean.endsWith("/employee")) {
     return 4; // More tab and its sub-pages
   }
   return -1;

@@ -21,6 +21,7 @@ import {
   Sparkles,
   Smartphone,
   Info,
+  Users,
 } from "lucide-react-native";
 import { clearAuthTokens, mobileApiClient } from "../../lib/api-client";
 import { getTabBarContentPadding } from "../../constants/layout";
@@ -103,6 +104,35 @@ export default function MoreScreen() {
               <Text className="text-xs font-semibold text-emerald-600">Verified</Text>
             </View>
           </View>
+        </View>
+
+        {/* Studio Management */}
+        <Text className="text-xs font-bold text-[#9B958F] uppercase tracking-wider mb-2 ml-1">
+          Studio Management
+        </Text>
+        <View className="bg-white border border-[#E8E2D8] rounded-2xl p-1 mb-4 shadow-xs">
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/employee")}
+            activeOpacity={0.7}
+            className="flex-row items-center justify-between p-3.5"
+            accessibilityRole="button"
+            accessibilityLabel="Open employee management"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 rounded-xl bg-[#FBF2F3] border border-[#F5D6D8] items-center justify-center">
+                <Users size={18} color="#78070D" />
+              </View>
+              <View>
+                <Text className="text-sm font-bold text-[#231E1C]">
+                  Employee Management
+                </Text>
+                <Text className="text-xs text-[#6E6862]">
+                  Browse and manage studio employees
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color="#9B958F" />
+          </TouchableOpacity>
         </View>
 
         {/* Atelier Floor Utilities */}

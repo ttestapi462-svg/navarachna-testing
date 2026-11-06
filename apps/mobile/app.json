@@ -26,6 +26,14 @@
       "expo-status-bar",
       "expo-sharing",
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Navarachna Designer Studio to access employee document images.",
+          "savePhotosPermission": "Allow Navarachna Designer Studio to save employee document images to your gallery.",
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "cameraPermission": "Allow Navarachna Studio to take receipt photos.",

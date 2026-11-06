@@ -44,6 +44,10 @@ export default function TabLayout() {
       <Tabs.Screen name="orders" options={{ title: "Orders" }} />
       <Tabs.Screen name="customer" options={{ title: "Customer" }} />
       <Tabs.Screen name="expense" options={{ title: "Expense" }} />
+      <Tabs.Screen
+        name="employee"
+        options={{ tabBarButton: () => null, title: "Employees" }}
+      />
       <Tabs.Screen name="more" options={{ title: "More" }} />
     </Tabs>
   );
