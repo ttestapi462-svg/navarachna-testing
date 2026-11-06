@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertCircle, Building2, ChevronRight, Phone, Plus, Search, UserRound, Users, X } from "lucide-react-native";
+import { AlertCircle, Phone, Plus, Search, Users, X } from "lucide-react-native";
 import { AtelierHeader } from "../layout/atelier-header";
 import { EmployeeDetailView } from "./employee-detail-view";
 import { EmployeeFormSheet, EMPLOYEE_DEPARTMENTS } from "./employee-form-sheet";
@@ -52,18 +52,10 @@ function employeeName(employee: EmployeeRecord) {
   return `${employee.firstName} ${employee.lastName || ""}`.trim();
 }
 
-function employeeIconTone(id: number, name: string) {
-  const tones = [
-    { foreground: "#BE185D", background: "#FCE7F3" },
-    { foreground: "#6D28D9", background: "#F3E8FF" },
-    { foreground: "#4338CA", background: "#E0E7FF" },
-    { foreground: "#0369A1", background: "#E0F2FE" },
-    { foreground: "#B45309", background: "#FEF3C7" },
-    { foreground: "#047857", background: "#D1FAE5" },
-  ];
-  let hash = id || 0;
-  for (let i = 0; i < name.length; i++) hash = (hash << 5) - hash + name.charCodeAt(i);
-  return tones[Math.abs(hash) % tones.length];
+function employeeInitials(employee: EmployeeRecord) {
+  const first = (employee.firstName || "").trim().charAt(0);
+  const last = (employee.lastName || "").trim().charAt(0);
+  return `${first}${last}`.toUpperCase() || "?";
 }
 
 function departmentTone(department: string) {
@@ -326,45 +318,38 @@ export default function EmployeeManagementScreen() {
         onEndReachedThreshold={0.3}
         renderItem={({ item: employee }) => {
           const name = employeeName(employee);
-          const iconTone = employeeIconTone(employee.id, name);
           const roleTone = departmentTone(employee.department);
           return (
-            <View style={[styles.employeeCard, { height: employeeCardHeight, borderLeftColor: roleTone.foreground }]}>
-              <TouchableOpacity style={styles.employeeInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile`}>
-                <View style={styles.employeeCopy}>
-                  <View style={styles.nameRow}>
-                    <View style={[styles.employeeIconBadge, { backgroundColor: iconTone.background }]}>
-                      <UserRound size={11} color={iconTone.foreground} />
-                    </View>
-                    <Text style={styles.employeeName} numberOfLines={1}>{name}</Text>
-                    <View style={[styles.statusPill, employee.isActive ? styles.statusPillActive : styles.statusPillInactive]}>
-                      <View style={[styles.statusDot, employee.isActive ? styles.statusDotActive : styles.statusDotInactive]} />
-                      <Text style={[styles.statusPillText, employee.isActive ? styles.statusPillTextActive : styles.statusPillTextInactive]}>
-                        {employee.isActive ? "Active" : "Inactive"}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <View style={[styles.metaItem, styles.departmentPill, { backgroundColor: roleTone.background, borderColor: roleTone.border }]}>
-                      <View style={[styles.metaIconBadge, { backgroundColor: roleTone.background }]}>
-                        <Building2 size={11} color={roleTone.foreground} />
-                      </View>
-                      <Text style={[styles.departmentMeta, { color: roleTone.foreground }]} numberOfLines={1}>{employee.department}</Text>
-                    </View>
-                    <View style={styles.metaDivider} />
-                    <View style={styles.metaItem}>
-                      <View style={[styles.metaIconBadge, styles.mobileIconBadge]}>
-                        <Phone size={11} color="#059669" />
-                      </View>
-                      <Text style={styles.mobileMeta} numberOfLines={1}>{employee.mobile}</Text>
-                    </View>
-                  </View>
+            <View style={[styles.employeeCard, { height: employeeCardHeight }]}>
+              {/* Staff-badge panel: department-tinted, initials avatar with live status dot */}
+              <TouchableOpacity
+                style={[styles.badgePanel, { backgroundColor: roleTone.background, borderRightColor: roleTone.border }]}
+                onPress={() => setProfileEmployee(employee)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${name}'s profile`}
+              >
+                <View style={[styles.initialsAvatar, { borderColor: roleTone.border }, !employee.isActive && styles.initialsAvatarInactive]}>
+                  <Text style={[styles.initialsText, { color: roleTone.foreground }]}>{employeeInitials(employee)}</Text>
+                  <View style={[styles.avatarStatusDot, employee.isActive ? styles.statusDotActive : styles.statusDotInactive]} />
                 </View>
               </TouchableOpacity>
-              <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.callButton} onPress={() => callEmployee(employee.mobile)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Call ${name}`}><Phone size={15} color={PRIMARY} /></TouchableOpacity>
-                <TouchableOpacity style={styles.chevronButton} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}`}><ChevronRight size={16} color="#B8B2A8" /></TouchableOpacity>
-              </View>
+
+              <TouchableOpacity style={styles.employeeInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile`}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.employeeName} numberOfLines={1}>{name}</Text>
+                  {!employee.isActive ? <Text style={styles.inactiveTag}>INACTIVE</Text> : null}
+                </View>
+                <Text style={[styles.roleLabel, { color: roleTone.foreground }]} numberOfLines={1}>{employee.department}</Text>
+                <View style={styles.mobileRow}>
+                  <Phone size={10.5} color="#8C827A" />
+                  <Text style={styles.mobileMeta} numberOfLines={1}>{employee.mobile}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.callButton} onPress={() => callEmployee(employee.mobile)} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }} accessibilityRole="button" accessibilityLabel={`Call ${name}`}>
+                <Phone size={16} color="#FFFFFF" strokeWidth={2.2} />
+              </TouchableOpacity>
             </View>
           );
         }}
@@ -461,17 +446,15 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: PRIMARY, fontWeight: "700" },
   employeeList: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: 16, paddingTop: 2, gap: 7 },
+  // Staff-badge card: tinted initials panel on the left + solid call button on the right.
   employeeCard: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignItems: "stretch",
     borderRadius: 16,
     borderWidth: 1,
-    borderLeftWidth: 3,
     borderColor: "#DED7CE",
     backgroundColor: SURFACE,
+    overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -483,33 +466,59 @@ const styles = StyleSheet.create({
       web: { boxShadow: "0 3px 8px rgba(35,30,28,0.08)" },
     }),
   },
-  employeeInfo: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
-  employeeCopy: { flex: 1, minWidth: 0 },
+  badgePanel: {
+    width: 64,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRightWidth: 1,
+  },
+  initialsAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    borderWidth: 1,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  initialsAvatarInactive: { opacity: 0.55 },
+  initialsText: { fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  avatarStatusDot: {
+    position: "absolute",
+    right: -3,
+    bottom: -3,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: SURFACE,
+  },
+  employeeInfo: { flex: 1, minWidth: 0, justifyContent: "center", paddingLeft: 12, paddingRight: 8, gap: 2 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  employeeIconBadge: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "rgba(120,7,13,0.10)", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   employeeName: { flexShrink: 1, color: TEXT, fontSize: 15, fontWeight: "700" },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
-  statusPillActive: { backgroundColor: "#EFF9F4", borderColor: "#D5EBDD" },
-  statusPillInactive: { backgroundColor: "#FFF3F2", borderColor: "#F2D8D5" },
-  statusPillText: { fontSize: 9.5, lineHeight: 12, fontWeight: "700" },
-  statusPillTextActive: { color: "#047857" },
-  statusPillTextInactive: { color: "#B42318" },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  inactiveTag: { color: "#B42318", fontSize: 8.5, fontWeight: "800", letterSpacing: 0.6 },
   statusDotActive: { backgroundColor: SUCCESS },
   statusDotInactive: { backgroundColor: "#DC2626" },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, minWidth: 0 },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 4, minWidth: 0 },
-  metaIconBadge: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  departmentPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, borderWidth: 1, flexShrink: 1 },
-  mobileIconBadge: { backgroundColor: "#ECFDF5" },
-  departmentMeta: { flexShrink: 1, minWidth: 0, fontSize: 10.5, fontWeight: "600" },
-  mobileMeta: { flexShrink: 0, color: MUTED, fontSize: 11.5, fontVariant: ["tabular-nums"] },
-  metaDivider: { width: StyleSheet.hairlineWidth, height: 11, backgroundColor: BORDER },
-  actionsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 6 },
-  callButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#FBF2F3", borderWidth: 1, borderColor: "#E8C6C8", alignItems: "center", justifyContent: "center" },
-  chevronButton: { padding: 4, alignItems: "center", justifyContent: "center" },
+  roleLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
+  mobileRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  mobileMeta: { flexShrink: 1, color: MUTED, fontSize: 11.5, fontVariant: ["tabular-nums"] },
+  callButton: {
+    alignSelf: "center",
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    marginRight: 12,
+    backgroundColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: { shadowColor: PRIMARY, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3 },
+      android: { elevation: 2 },
+      web: { boxShadow: "0 2px 4px rgba(120,7,13,0.25)" },
+    }),
+  },
   skeletonList: { gap: 7 },
-  skeletonCard: { height: 60, borderRadius: 14, backgroundColor: "#EFEBE4" },
+  skeletonCard: { height: 60, borderRadius: 16, backgroundColor: "#EFEBE4" },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
