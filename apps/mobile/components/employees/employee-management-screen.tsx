@@ -36,7 +36,6 @@ const PRIMARY = "#78070D";
 const PRIMARY_MUTED = "#FBF2F3";
 const BACKGROUND = "#FAF7F2";
 const SURFACE = "#FFFFFF";
-const BORDER = "#E8E2D8";
 const TEXT = "#231E1C";
 const MUTED = "#6E6862";
 const PAGE_SIZE = 15;
@@ -281,15 +280,27 @@ export default function EmployeeManagementScreen() {
             {searchDraft ? <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Clear search"><X size={15} color={MUTED} /></TouchableOpacity> : null}
           </View>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
-          <TouchableOpacity style={[styles.filterChip, !department && styles.filterChipActive]} onPress={() => setDepartment("")} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={[styles.filterChipText, !department && styles.filterChipTextActive]}>All employees</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.filterChipRow}>
+          <TouchableOpacity style={[styles.filterChip, !department && styles.filterChipActive]} onPress={() => setDepartment("")} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: !department }}>
+            <Text style={[styles.filterChipText, !department && styles.filterChipTextActive]}>All</Text>
           </TouchableOpacity>
-          {EMPLOYEE_DEPARTMENTS.map((item) => (
-            <TouchableOpacity key={item} style={[styles.filterChip, department === item && styles.filterChipActive]} onPress={() => setDepartment((current) => current === item ? "" : item)} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: department === item }}>
-              <Text style={[styles.filterChipText, department === item && styles.filterChipTextActive]}>{item}</Text>
-            </TouchableOpacity>
-          ))}
+          {EMPLOYEE_DEPARTMENTS.map((item) => {
+            const tone = departmentTone(item);
+            const selected = department === item;
+            return (
+              <TouchableOpacity
+                key={item}
+                style={[styles.filterChip, selected && { backgroundColor: tone.background, borderColor: tone.foreground }]}
+                onPress={() => setDepartment((current) => current === item ? "" : item)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <View style={[styles.chipDot, { backgroundColor: tone.foreground }]} />
+                <Text style={[styles.filterChipText, selected && { color: tone.foreground, fontWeight: "800" }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -297,6 +308,7 @@ export default function EmployeeManagementScreen() {
         style={styles.employeeList}
         data={pageLoading ? [] : employees}
         keyExtractor={(employee) => String(employee.id)}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.listContent, { paddingBottom: getTabBarContentPadding(insets.bottom) }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={PRIMARY} colors={[PRIMARY]} />}
         onEndReached={loadMore}
@@ -309,7 +321,7 @@ export default function EmployeeManagementScreen() {
           return (
             <View style={[styles.row, isFirst && styles.rowFirst, isLast ? styles.rowLast : styles.rowDivider]}>
               <View style={[styles.deptBar, { backgroundColor: employee.isActive ? roleTone.foreground : "#CFC8BE" }]} />
-              <TouchableOpacity style={styles.rowInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile`}>
+              <TouchableOpacity style={styles.rowInfo} onPress={() => setProfileEmployee(employee)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${name}'s profile, ${employee.department}, ${employee.isActive ? "active" : "inactive"}`}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.employeeName, !employee.isActive && styles.employeeNameInactive]} numberOfLines={1}>{name}</Text>
                   {!employee.isActive ? <Text style={styles.inactiveTag}>INACTIVE</Text> : null}
@@ -337,7 +349,7 @@ export default function EmployeeManagementScreen() {
             ))}
           </View>
         ) : employees.length > 0 ? (
-          <Text style={styles.listCaption}>{totalCount} TEAM {totalCount === 1 ? "MEMBER" : "MEMBERS"}</Text>
+          <Text style={styles.listCaption}>{totalCount} {department ? department.toUpperCase() : totalCount === 1 ? "TEAM MEMBER" : "TEAM MEMBERS"}</Text>
         ) : undefined}
         ListEmptyComponent={!pageLoading ? (
           <View style={styles.emptyContainer}>
@@ -384,51 +396,58 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   fixedTopSection: { paddingHorizontal: 16, backgroundColor: "transparent" },
+  // Compact toolbar: rounded-rectangle search (Customer uses a full pill) and square-cornered chips.
   toolbarRow: {
-    height: 44,
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
-    marginBottom: 6,
+    marginTop: 6,
+    marginBottom: 8,
   },
   searchBox: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E9EAF1",
+    borderColor: ROW_BORDER,
     backgroundColor: SURFACE,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
-  searchInput: { flex: 1, fontSize: 13.5, color: TEXT, height: 44, paddingVertical: 0 },
+  searchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: TEXT,
+    height: 40,
+    paddingVertical: 0,
+    ...Platform.select({
+      web: { outlineStyle: "none" } as any,
+    }),
+  },
   filterChipRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingBottom: 6,
+    paddingBottom: 10,
   },
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    height: 28,
     paddingHorizontal: 10,
-    paddingVertical: 5.5,
-    borderRadius: 20,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: ROW_BORDER,
     backgroundColor: SURFACE,
   },
   filterChipActive: { backgroundColor: PRIMARY_MUTED, borderColor: "#C69596" },
   filterChipText: { color: MUTED, fontSize: 11.5, fontWeight: "600" },
-  filterChipTextActive: { color: PRIMARY, fontWeight: "700" },
+  filterChipTextActive: { color: PRIMARY, fontWeight: "800" },
+  chipDot: { width: 6, height: 6, borderRadius: 3 },
   employeeList: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: 16, paddingTop: 2 },
   // Compact directory: one grouped sheet, hairline-divided rows, department colour bar.
